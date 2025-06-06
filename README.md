@@ -10,7 +10,7 @@ Temporal users running self-hosted instances can now leverage the power of Yugab
 You may start a local instance of temporal-yugabyte using docker-compose:
 
 ```shell
-docker-compose -f docker/docker-compose/quick-start.yml
+docker-compose -f docker/docker-compose/quick-start.yml up
 ```
 This command will deploy a Temporal instance with Yugabyte as the primary datastore, and Elasticsearch as the visibility store.  You may find the Temporal UI at http://localhost:8080 and the Temporal API at localhost:7233.
 
