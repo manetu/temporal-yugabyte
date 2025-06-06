@@ -1,0 +1,83 @@
+frontend.rps:
+  - value: 1000000                          # default: 2400
+    constraints: {}
+frontend.namespaceRPS:
+  - value: 1000000                          # default: 2400
+    constraints: {}
+frontend.persistenceMaxQPS:
+  - value: 1000000                          # default: 2000
+    constraints: {}
+history.rps:
+  - value: 1000000                          # default: 3000
+    constraints: {}
+history.persistenceMaxQPS:
+  - value: 1000000                         # default: 9000
+    constraints: {}
+history.persistencePerShardNamespaceMaxQPS:
+  - value: 1000000                         # default: 0
+    constraints: {}
+history.transferProcessorMaxPollRPS:
+  - value: 1000000
+    constraints: {}
+matching.rps:
+  - value: 1000000                          # default: 1200
+    constraints: {}
+matching.persistenceMaxQPS:
+  - value: 1000000                         # default: 9000
+    constraints: {}
+matching.numTaskqueueReadPartitions:
+  - value: 10                              # default: 4
+    constraints: {}
+matching.numTaskqueueWritePartitions:
+  - value: 10                              # default: 4
+    constraints: {}
+matching.forwarderMaxRatePerSecond:
+  - value: 1000                            # default: 10
+system.visibilityPersistenceMaxReadQPS:
+  - value: 1000000                         # default: 9000
+    constraints: {}
+system.visibilityPersistenceMaxWriteQPS:
+  - value: 1000000                         # default: 9000
+    constraints: {}
+system.shardRPSWarnLimit:
+  - value: 5000                         # default: 50
+    constraints: { }
+system.persistenceQPSBurstRatio:
+  - value: 10.0                         # default: 1.0
+    constraints: { }
+system.enableEagerWorkflowStart:
+  - value: true
+system.enableActivityEagerExecution:
+  - value: true
+frontend.workerVersioningDataAPIs:
+  - value: true
+frontend.workerVersioningWorkflowAPIs:
+  - value: true
+system.enableDeployments:
+  - value: true
+system.enableDeploymentVersions:
+  - value: true
+frontend.workerVersioningRuleAPIs:
+  - value: true
+frontend.enableExecuteMultiOperation:
+  - value: true
+system.enableNexus:
+  - value: true
+component.nexusoperations.callback.endpoint.template:
+  - value: http://localhost:7243/namespaces/{{.NamespaceName}}/nexus/callback
+component.callbacks.allowedAddresses:
+  - value:
+      - Pattern: "*"
+        AllowInsecure: true
+matching.queryWorkflowTaskTimeoutLogRate:
+  - value: 1.0
+history.ReplicationEnableUpdateWithNewTaskMerge:
+  - value: true
+history.enableWorkflowExecutionTimeoutTimer:
+  - value: true
+history.hostLevelCacheMaxSize:
+  - value: 8192
+history.shardIOConcurrency:
+  - value: 1
+history.clientOwnershipCachingEnabled:
+  - value: true

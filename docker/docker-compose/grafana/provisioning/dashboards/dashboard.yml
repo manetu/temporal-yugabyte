@@ -1,0 +1,19 @@
+apiVersion: 1
+
+providers:
+- name: "Temporal"
+  orgId: 1
+  folder: 'Temporal'
+  type: file
+  disableDeletion: false
+  editable: true
+  options:
+    path: /etc/grafana/provisioning/dashboards/temporalio
+- name: "Yugabyte"
+  orgId: 1
+  folder: 'Yugabyte'
+  type: file
+  disableDeletion: false
+  editable: true
+  options:
+    path: /etc/grafana/provisioning/dashboards/yugabyte

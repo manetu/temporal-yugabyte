@@ -1,0 +1,60 @@
+
+services:
+  yugabyte:
+    image: yugabytedb/yugabyte:latest
+    container_name: temporal-yugabyte
+    ports:
+      - "7000:7000"
+      - "9000:9000"
+      - "5433:5433"
+      - "9042:9042"
+      - "12000:12000"
+    command: bin/yugabyted start --daemon=false --config=/etc/yugabyte/opt/yugabyte.conf
+    volumes:
+      - ./yugabyte:/etc/yugabyte/opt
+    networks:
+      - temporal-network
+  elasticsearch:
+    image: elasticsearch:7.10.1
+    container_name: temporal-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      # Make ES available both on _local_ and _site_,
+      # and use _local_ for the publish_host.
+      #
+      # See here for details on network configuration:
+      # https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html
+      - network.host=_local_,_site_
+      - network.publish_host=_local_
+      # Set storage limit to low number.
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms100m -Xmx100m
+    networks:
+      - temporal-network
+  temporal:
+    container_name: temporal
+    depends_on:
+      - yugabyte
+      - elasticsearch
+    environment:
+      - BIND_ON_IP=0.0.0.0
+      - YUGABYTE_SEEDS=yugabyte
+      - ENABLE_ES=true
+      - ES_SEEDS=elasticsearch
+      - ES_VERSION=v7
+    image: ${TEMPORAL_SERVER_IMAGE}
+    command: autosetup
+    networks:
+      - temporal-network
+    ports:
+      - "7233:7233"
+
+networks:
+  temporal-network:
+    driver: bridge
+    name: temporal-network

@@ -1,0 +1,81 @@
+# Runs all required Temporal service dependencies.
+# Use to run service locally or run integration core.
+# Include platform specific file also:
+# docker-compose -f develop.yml -f docker-compose.linux.yml up
+services:
+  yugabyte:
+    image: yugabytedb/yugabyte:latest
+    container_name: temporal-dev-yugabyte
+    ports:
+      - "7000:7000"
+      - "9000:9000"
+      - "5433:5433"
+      - "9042:9042"
+      - "12000:12000"
+    command: bin/yugabyted start --daemon=false --config=/etc/yugabyte/opt/yugabyte.conf
+    volumes:
+      - ./yugabyte:/etc/yugabyte/opt
+    networks:
+      - temporal-dev-network
+  elasticsearch:
+    image: elasticsearch:7.10.1
+    container_name: temporal-dev-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      # Make ES available both on _local_ and _site_,
+      # and use _local_ for the publish_host.
+      #
+      # See here for details on network configuration:
+      # https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html
+      - network.host=_local_,_site_
+      - network.publish_host=_local_
+      # Set storage limit to low number.
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms100m -Xmx100m
+    networks:
+      - temporal-dev-network
+  prometheus:
+    # Use http://localhost:9090/ to access Prometheus.
+    image: prom/prometheus:latest
+    container_name: temporal-dev-prometheus
+    command:
+      - "--log.level=error"
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - temporal-dev-network
+  grafana:
+    # Use http://localhost:3000/ to access Grafana (admin/admin).
+    image: grafana/grafana:latest
+    container_name: temporal-dev-grafana
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    ports:
+      - "3000:3000"
+    networks:
+      - temporal-dev-network
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: temporal-dev-ui
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+    ports:
+      - "8080:8080"
+
+networks:
+  temporal-dev-network:
+    driver: bridge
+    name: temporal-dev-network
