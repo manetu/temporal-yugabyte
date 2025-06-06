@@ -5,6 +5,15 @@ The code in this repository implements a [Temporal](https://temporal.io) [Custom
 ## Target Audience
 Temporal users running self-hosted instances can now leverage the power of Yugabyte YCQL as their primary data store. This integration offers a leap in performance, reliability, and ease of operation, surpassing alternatives such as Apache Cassandra. For Yugabyte users, integrating Temporal's durable execution model into their stack is now a seamless process, maximizing their existing investment and expertise.
 
+## Quickstart
+
+You may start a local instance of temporal-yugabyte using docker-compose:
+
+```shell
+docker-compose -f docker/docker-compose/quick-start.yml
+```
+This command will deploy a Temporal instance with Yugabyte as the primary datastore, and Elasticsearch as the visibility store.  You may find the Temporal UI at http://localhost:8080 and the Temporal API at localhost:7233.
+
 ## Status
 
 Most features(*) are code-complete, stable, and used in production. All code changes are verified through an extensive unit and integration test suite via continuous integration (CI) to ensure the quality of each change.
