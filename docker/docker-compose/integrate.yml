@@ -1,4 +1,3 @@
-
 services:
   yugabyte:
     image: yugabytedb/yugabyte:latest
@@ -9,11 +8,9 @@ services:
       - "5433:5433"
       - "9042:9042"
       - "12000:12000"
-    command: bin/yugabyted start --daemon=false --config=/etc/yugabyte/opt/yugabyte.conf
-    volumes:
-      - ./yugabyte:/etc/yugabyte/opt
+    command: bin/yugabyted start --daemon=false
     networks:
-      - temporal-network
+      - integration-test
   elasticsearch:
     image: elasticsearch:7.10.1
     container_name: temporal-elasticsearch
@@ -35,26 +32,9 @@ services:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms100m -Xmx100m
     networks:
-      - temporal-network
-  temporal:
-    container_name: temporal
-    depends_on:
-      - yugabyte
-      - elasticsearch
-    environment:
-      - BIND_ON_IP=0.0.0.0
-      - YUGABYTE_SEEDS=yugabyte
-      - ENABLE_ES=true
-      - ES_SEEDS=elasticsearch
-      - ES_VERSION=v7
-    image: ${TEMPORAL_SERVER_IMAGE}
-    command: autosetup
-    networks:
-      - temporal-network
-    ports:
-      - "7233:7233"
+      - integration-test
 
 networks:
-  temporal-network:
+  integration-test:
     driver: bridge
-    name: temporal-network
+    name: integration-test

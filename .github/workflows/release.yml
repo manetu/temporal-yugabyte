@@ -1,11 +1,11 @@
-name: Build and Push Docker Image
+name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Test"]
     branches: [ master, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ master ]
+    types:
+      - completed
 
 env:
   REGISTRY: ghcr.io
@@ -14,6 +14,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     container: ghcr.io/manetu/ci-tools:3.1
     permissions:
       contents: read
@@ -54,7 +55,7 @@ jobs:
         context: .
         push: ${{ github.event_name != 'pull_request' }}
         metadata: ${{ steps.meta.outputs.json }}
-        stages: admin-tools,integration-test
+        stages: admin-tools
         platforms: linux/amd64,linux/arm64
 
 #    - name: Generate artifact attestation

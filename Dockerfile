@@ -13,24 +13,11 @@ COPY integration /src/integration
 COPY schema /src/schema
 COPY utils /src/utils
 
-RUN cd /src && make clean all
+RUN cd /src && make clean bin
 
 ENV GOPATH=/go
 
 RUN go install github.com/jwilder/dockerize@latest
-
-#-------------------------------------------------------------------------------
-# Integration Test
-#-------------------------------------------------------------------------------
-FROM manetu/unified-builder:v3.0-jre as integration-test
-
-WORKDIR /etc/temporal
-COPY integration/scripts .
-
-COPY --from=builder /src/integration/core/target/* /usr/local/bin/
-COPY --from=builder /src/integration/clojure/target/uberjar/clojure-integration-test.jar /usr/local/
-
-ENTRYPOINT ["/etc/temporal/entrypoint.sh"]
 
 #-------------------------------------------------------------------------------
 # Admin Tools
