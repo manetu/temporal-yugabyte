@@ -36,7 +36,7 @@ services:
     networks:
       - temporal-network
   temporal:
-    image: manetu/temporal-yugabyte:latest
+    image: ghcr.io/manetu/temporal-yugabyte:latest
     container_name: temporal
     depends_on:
       - yugabyte

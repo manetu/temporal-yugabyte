@@ -56,7 +56,7 @@ The result is a Temporal server that supports connecting to a Yugabyte YCQL data
 
 ## How to Use
 
-Manetu publishes the compiled artifacts to [Dockerhub](https://hub.docker.com/repository/docker/manetu/temporal-yugabyte/general) for convenient deployment in containerized environments such as Kubernetes. Generally speaking, the deployment of Yugabyte YCQL enabled Temporal is similar to existing self-hosted Temporal deployment methods, with the following adjustments:
+Manetu publishes the compiled artifacts as Docker containers for convenient deployment in containerized environments such as Kubernetes. Generally speaking, the deployment of Yugabyte YCQL enabled Temporal is similar to existing self-hosted Temporal deployment methods, with the following adjustments:
 
 - Substitute the Temporal server instances with a binary/container from this project
 - Add the configuration for Yugabyte YCQL as a CustomDataStore
@@ -66,12 +66,12 @@ The following guide is geared towards users deploying to Kubernetes using the [T
 
 ### Binary Substitution
 
-Substitute the image used for the various Temporal services (Frontend, History, Matching, etc) with the temporal-yugabyte image from Dockerhub:
+Substitute the container image used for the various Temporal services (Frontend, History, Matching, etc) with the temporal-yugabyte image from our [published releases](https://github.com/manetu/temporal-yugabyte/pkgs/container/temporal-yugabyte):
 
 ```yaml
 server:
   image:
-    repository: manetu/temporal-yugabyte:v1.1.0
+    repository: ghcr.io/manetu/temporal-yugabyte:latest
 ```
 
 ### Configure the Yugabyte YCQL Custom Datastore
@@ -118,7 +118,7 @@ spec:
       serviceAccountName: default
       containers:
         - name: temporal-defaultstore-init
-          image: manetu/temporal-yugabyte:v1.1.0-admin-tools
+          image: ghcr.io/manetu/temporal-yugabyte:latest-admin-tools
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
