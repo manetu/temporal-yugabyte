@@ -1,0 +1,63 @@
+name: Test
+
+on:
+  push:
+    branches: [ '*' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master ]
+
+env:
+    GOFLAGS: "-buildvcs=false"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: manetu/unified-builder:v3.0
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: make all
+
+    - name: Bundle assets
+      run: tar -cvf assets.tar target/ integration/core/target/ integration/clojure/target/uberjar/clojure-integration-test.jar
+
+    - name: Upload assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled-assets
+        path: assets.tar
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    container: ghcr.io/manetu/ci-tools:3.1
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download assets
+      uses: actions/download-artifact@v4
+      with:
+        name: compiled-assets
+        path: assets
+
+    - name: Unbundle assets
+      run: tar -xvf assets/assets.tar
+
+    - name: Run third-party services
+      uses: hoverkraft-tech/compose-action@v2.0.1
+      with:
+        compose-file: "./docker/docker-compose/integrate.yml"
+        up-flags: "--quiet-pull --wait"
+
+    - name: Run integration tests
+      run: docker run -i --network integration-test -v ${{ github.workspace }}:/work -w /work manetu/unified-builder:v3.0-jre ./integration/run.sh
