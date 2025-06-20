@@ -2,17 +2,16 @@
 
 set -eux
 
-export CASSANDRA_SEEDS=yugabyte
-export PRIMARY_KEYSPACE=temporal
+export TEMPORAL_CONFIG_ENV=${TEMPORAL_CONFIG_ENV:-integration}
+export BINDIR=./target
 
-export ES_SEEDS=elasticsearch
+export CASSANDRA_SEEDS=${CASSANDRA_SEEDS:-yugabyte}
+export CASSANDRA_KEYSPACE=temporal
+
+export ES_SEEDS=${ES_SEEDS:-elasticsearch}
 export ES_SERVER="http://$ES_SEEDS:9200"
 export ES_VERSION=v7
 export ES_VIS_INDEX=temporal_visibility_v1_dev
-
-export INTEGRATION_COMPOSE=docker/docker-compose/integrate.yml
-
-export BINDIR=./target
 
 init_yb() {
     until $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" validate-health; do
@@ -22,9 +21,9 @@ init_yb() {
     echo 'Yugabyte started.'
 
     SCHEMA_DIR=./schema/yugabyte/temporal/versioned
-    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" create -k "${PRIMARY_KEYSPACE}" --rf "1"
-    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" -k "${PRIMARY_KEYSPACE}" setup-schema -v 0.0
-    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" -k "${PRIMARY_KEYSPACE}" update-schema -d "${SCHEMA_DIR}"
+    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" create -k "${CASSANDRA_KEYSPACE}" --rf "1"
+    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" -k "${CASSANDRA_KEYSPACE}" setup-schema -v 0.0
+    $BINDIR/temporal-cassandra-tool --ep "${CASSANDRA_SEEDS}" -k "${CASSANDRA_KEYSPACE}" update-schema -d "${SCHEMA_DIR}"
 }
 
 init_es() {
@@ -45,33 +44,36 @@ init_es() {
 
 }
 
-start_temporal() {
-    $BINDIR/temporal-server --env integration --allow-no-auth start &
+init_services() {
+    init_yb
+    init_es
 }
 
-wait_for_temporal() {
+start_temporal() {
+    $BINDIR/temporal-server --env $TEMPORAL_CONFIG_ENV --allow-no-auth start &
+    export PID=$!
+    echo "Temporal started on PID: $PID"
+
+    function cleanup() {
+        echo "Shutting down Temporal on PID: $PID"
+        kill -9 $PID
+    }
+    trap cleanup EXIT
+
     until $BINDIR/temporal operator cluster health | grep -q SERVING; do
         echo "Waiting for Temporal server to start..."
         sleep 1
     done
-    echo "Temporal server started."
+    echo "Temporal service ready."
 }
 
-init_services() {
-    init_yb
-    init_es
-    start_temporal
-}
-
+# Initialize system
 init_services
+start_temporal
 
-export TEMPORAL_PID=$!
-echo "Temporal started on PID: $TEMPORAL_PID"
-wait_for_temporal
-
+# Create our default namespace
 $BINDIR/temporal operator namespace create default
 
+# Run the integration suite
 integration/core/target/core-integration-test -test.v
 java -jar integration/clojure/target/uberjar/clojure-integration-test.jar
-
-kill -9 $TEMPORAL_PID

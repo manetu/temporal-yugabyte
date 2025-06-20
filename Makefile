@@ -55,7 +55,7 @@ integration:
 
 target/temporal-server: $(ALL_SRC)
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
-	CGO_ENABLED=$(CGO_ENABLED) go build -o $@ ./cmd/server
+	CGO_ENABLED=$(CGO_ENABLED) go build $(EXTRA_SERVER_BUILD_FLAGS) -o $@ ./cmd/server
 
 target/temporal-cassandra-tool: $(ALL_SRC)
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
