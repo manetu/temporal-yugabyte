@@ -10,7 +10,7 @@ require (
 	github.com/urfave/cli/v2 v2.27.6
 	github.com/yugabyte/gocql v1.6.0-yb-1
 	go.temporal.io/api v1.46.0
-	go.temporal.io/server v1.27.2
+	go.temporal.io/server v1.27.3
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
