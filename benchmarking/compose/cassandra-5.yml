@@ -1,0 +1,68 @@
+services:
+  cassandra:
+    image: cassandra:5.0.5
+    container_name: temporal-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_START_RPC=true       # default
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0  # default
+      - CASSANDRA_LISTEN_ADDRESS=auto  # default, use IP addr of container # = CASSANDRA_BROADCAST_ADDRESS
+      - CASSANDRA_CLUSTER_NAME=my-cluster
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_DC=my-datacenter-1
+    networks:
+      - temporal-network
+  elasticsearch:
+    image: elasticsearch:7.10.1
+    container_name: temporal-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      # Make ES available both on _local_ and _site_,
+      # and use _local_ for the publish_host.
+      #
+      # See here for details on network configuration:
+      # https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html
+      - network.host=_local_,_site_
+      - network.publish_host=_local_
+      # Set storage limit to low number.
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms100m -Xmx100m
+    networks:
+      - temporal-network
+  temporal:
+    image: temporalio/auto-setup:1.27.3
+    container_name: temporal
+    depends_on:
+      - cassandra
+      - elasticsearch
+    environment:
+      - BIND_ON_IP=0.0.0.0
+      - CASSANDRA_SEEDS=cassandra
+      - ENABLE_ES=true
+      - ES_SEEDS=elasticsearch
+      - ES_VERSION=v7
+    command: autosetup
+    networks:
+      - temporal-network
+    ports:
+      - "7233:7233"
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: temporal-ui
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    networks:
+      - temporal-network
+    ports:
+      - "8080:8080"
+
+networks:
+  temporal-network:
+    driver: bridge
+    name: temporal-network
