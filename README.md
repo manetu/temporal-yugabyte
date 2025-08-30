@@ -157,6 +157,10 @@ spec:
 
 ```
 
+## Quantifying Performance
+
+See [Benchmarking](./benchmarking/README.md)
+
 ## Development
 
 This repository is self-contained and can be used as is for development though the process is still slightly cumbersome. Improvements welcome.
