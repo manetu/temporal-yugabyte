@@ -8,9 +8,7 @@ services:
       - "5433:5433"
       - "9042:9042"
       - "12000:12000"
-    command: bin/yugabyted start --daemon=false --config=/etc/yugabyte/opt/yugabyte.conf
-    volumes:
-      - ./yugabyte:/etc/yugabyte/opt
+    command: bin/yugabyted start --daemon=false
     networks:
       - temporal-network
   elasticsearch:
