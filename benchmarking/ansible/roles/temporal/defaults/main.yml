@@ -1,0 +1,126 @@
+temporal_version: 1.27                   # overall upstream release
+temporal_server_version: 1.1             # manetu-yugabyte server release
+temporal_server_image: ghcr.io/manetu/temporal-yugabyte
+temporal_schema_image: "{{ temporal_server_image }}:{{ temporal_server_version }}-admin-tools"
+temporal_namespace: temporal-benchmark
+temporal_dns: temporal.{{ dns_suffix | default('invalid') }}
+temporal_server_replicas: 3
+temporal_frontend_replicas: 3
+temporal_history_replicas: 3
+temporal_matching_replicas: 3
+temporal_worker_replicas: 3
+temporal_elasticsearch_replicas: 3
+temporal_history_shards: 1000   # IMPORTANT: This value cannot be changed, once it's set.  Tune about 1000/replica
+temporal_tls_enabled: false
+temporal_tls_duration: 87600h
+temporal_dev_mode: false
+temporal_dev_storage_size: 10Gi
+temporal_dev_storage_class: "{{ default_storage_class | default('default') }}"
+temporal_database: yugabyte # select from 'yugabyte' or 'cassandra'
+
+temporal_affinity: "{{ default_affinity | default({}) }}"
+temporal_nodeSelector: "{{ default_nodeSelector | default({}) }}"
+temporal_tolerations: "{{ default_tolerations | default([]) }}"
+# - key: dedicated
+#   operator: Equal
+#   value: experimental
+#   effect: NoSchedule
+
+temporal_cassandra_replication_factor: 3
+temporal_cassandra_keyspace: temporal
+
+temporal_elasticsearch_version: 7.17.28
+temporal_elasticsearch_wait_timeout: 300
+temporal_elasticsearch_replicas: 3
+temporal_elasticsearch_storage_class: "{{ default_storage_class | default('default') }}"
+temporal_elasticsearch_storage_size: 10Gi
+temporal_elasticsearch_resources: {}
+#  requests:
+#    cpu: "1000m"
+#    memory: "2Gi"
+#  limits:
+#    cpu: "1000m"
+#    memory: "2Gi"
+temporal_elasticsearch_password: password
+
+temporal_elasticsearch_affinity: "{{ default_affinity | default({}) }}"
+temporal_elasticsearch_nodeSelector: "{{ default_nodeSelector | default({}) }}"
+temporal_elasticsearch_tolerations: "{{ default_tolerations | default([]) }}"
+# - key: dedicated
+#   operator: Equal
+#   value: experimental
+#   effect: NoSchedule
+
+temporal_frontend_resources: {}
+temporal_matching_resources: {}
+temporal_history_resources: {}
+temporal_worker_resources: {}
+
+temporal_retention_period: 1h
+
+temporal_base_dynamic_config:
+  system.enableNexus:
+    - value: false
+  system.enableEagerWorkflowStart:
+    - value: true
+  system.enableActivityEagerExecution:
+    - value: true
+  history.ReplicationEnableUpdateWithNewTaskMerge:
+    - value: true
+  history.enableWorkflowExecutionTimeoutTimer:
+    - value: true
+  history.clientOwnershipCachingEnabled:
+    - value: true
+  history.ReplicationTaskProcessorShardQPS:
+    - value: 1000000                          # default: 30
+  history.ReplicationTaskProcessorHostQPS:
+    - value: 1000000                          # default: 1500
+  history.ReplicationStreamSenderHighPriorityQPS:
+    - value: 1000000                          # default: 100
+  history.ReplicationStreamSenderLowPriorityQPS:
+    - value: 1000000                          # default: 100
+  history.transferProcessorMaxPollRPS:
+    - value: 1000000                          # default: 20
+  history.timerProcessorMaxPollRPS:
+    - value: 1000000                          # default: 20
+  history.outboundProcessorMaxPollRPS:
+    - value: 1000000                          # default: 20
+  history.outboundQueue.hostScheduler.maxTaskRPS:
+    - value: 1000000                          # default: 100
+  history.visibilityProcessorMaxPollRPS:
+    - value: 1000000                          # default: 20
+  history.rps:
+    - value: 1000000                          # default: 3000
+  history.persistenceMaxQPS:
+    - value: 1000000                          # default: 9000
+  history.persistencePerShardNamespaceMaxQPS:
+    - value: 1000000                          # default: 0
+  frontend.rps:
+    - value: 1000000                          # default: 2400
+  frontend.namespaceRPS:
+    - value: 1000000                          # default: 2400
+  frontend.persistenceMaxQPS:
+    - value: 1000000                          # default: 2000
+  frontend.namespaceRPS.visibility:
+    - value: 1000000                          # default: 10
+  matching.rps:
+    - value: 1000000                          # default: 1200
+  matching.persistenceMaxQPS:
+    - value: 1000000                          # default: 9000
+  matching.forwarderMaxRatePerSecond:
+    - value: 1000000                          # default: 10
+  system.visibilityPersistenceMaxReadQPS:
+    - value: 1000000                          # default: 9000
+  system.visibilityPersistenceMaxWriteQPS:
+    - value: 1000000                          # default: 9000
+
+
+temporal_dynamic_config: {}  # merged with temporal_base_dynamic_config
+#  matching.numTaskqueueReadPartitions:
+#  - value: 5
+#    constraints: {}
+#  matching.numTaskqueueWritePartitions:
+#  - value: 5
+#    constraints: {}
+
+storage_enabled: true

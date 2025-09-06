@@ -1,0 +1,10 @@
+all:
+  vars:
+    #temporal_database: yugabyte
+    temporal_database: cassandra
+
+config_host:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: /Users/ghaskins/ansible/python/bin/python

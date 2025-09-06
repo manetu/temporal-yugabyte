@@ -1,0 +1,21 @@
+- name: Create EKS environment
+  gather_facts: false
+  hosts: config_host
+  roles:
+    - python
+    - eks
+
+- name: Configure Ingress
+  hosts: config_host
+  vars:
+    aws_route53_namespace: traefik-system
+    aws_route53_service: traefik
+    aws_route53_record: "*.{{ dns_suffix }}"
+  roles:
+    - traefik
+  tasks:
+    - when: aws_route53_zone is defined
+      import_tasks: tasks/service-to-route53.yml
+
+- name: Deploy Benchmark Stack
+  import_playbook: benchmark.yml

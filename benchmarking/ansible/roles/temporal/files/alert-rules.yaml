@@ -1,0 +1,38 @@
+groups:
+- name: temporal.rules
+  rules:
+    - alert: High Temporal Long Request Failure Rate
+      expr: sum(temporal_long_request_failure)/sum(temporal_long_request)*100  > 5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High Failure Rate in Temporal Long Request Executions'
+        description: 'The failure rate of Temporal Long Request Executions has exceeded 5%. Investigate possible issues with workflows.'
+
+    - alert: High Pending Activity Tasks
+      expr: sum(rate(pending_tasks_count[5m])) > 300
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High Number of Pending Activity Tasks in Temporal'
+        description: 'The number of pending activity tasks has exceeded 300. Check for bottlenecks in the system.'
+
+    - alert: High Request Latency
+      expr: avg(temporal_request_latency_sum) > 1.0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High Request Latency in Temporal'
+        description: 'Temporal Request latency is higher than 1s. Monitor system performance.'
+
+    - alert: High Workflow Failure Rate 
+      expr: (1-(sum(complete_workflow_task_sticky_enabled_count)/sum(workflow_task_attempt_count))) * 100 >5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'High Workflow Failure Rate'
+        description: 'High Workflow Failure Rate. Investigate and resolve the issue.'

@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-yb-init
+spec:
+  template:
+    metadata:
+      name: temporal-yb-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext: {}
+      serviceAccountName: default
+      affinity: {{ temporal_affinity }}
+      nodeSelector: {{ temporal_nodeSelector }}
+      tolerations: {{ temporal_tolerations }}
+      containers:
+        - name: temporal-defaultstore-init
+          image: {{ temporal_schema_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -eux
+
+              temporal-cassandra-tool create -k {{ temporal_cassandra_keyspace }} --replication-factor "{{ temporal_cassandra_replication_factor }}"
+              temporal-cassandra-tool setup-schema -v "0.0"
+              temporal-cassandra-tool update-schema --schema-dir $TEMPORAL_SCHEMA_PATH/yugabyte/temporal/versioned
+          env:
+            - name: CASSANDRA_HOST
+              value: yugabyte-yb-tservers
+            - name: CASSANDRA_PORT
+              value: "9042"
+            - name: CASSANDRA_KEYSPACE
+              value: {{ temporal_cassandra_keyspace }}
+            - name: CASSANDRA_USER
+              value: cassandra
+            - name: CASSANDRA_PASSWORD
+              value: cassandra
+            - name: CASSANDRA_ENABLE_TLS
+              value: "false"
+          resources: {}

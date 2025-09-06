@@ -1,0 +1,210 @@
+fullnameOverride: "temporal"
+
+server:
+  image:
+    repository: {{ temporal_server_image }}
+    tag: {{ temporal_server_version }}
+    pullPolicy: Always
+  affinity: {{ temporal_affinity }}
+  nodeSelector: {{ temporal_nodeSelector }}
+  tolerations: {{ temporal_tolerations }}
+  replicaCount: {{ temporal_server_replicas }}
+  config:
+    numHistoryShards: {{ temporal_history_shards }}
+    tls:
+      internode:
+        server:
+          certFile: /etc/temporal/certs/internode/tls.crt
+          keyFile: /etc/temporal/certs/internode/tls.key
+          requireClientAuth: true
+          clientCaFiles:
+            - /etc/temporal/certs/internode/ca.crt
+        client:
+          serverName: "temporal.{{ temporal_namespace }}.svc.cluster.local"
+          rootCaFiles:
+            - /etc/temporal/certs/internode/ca.crt
+{% if temporal_tls_enabled %}
+      frontend:
+        server:
+          certFile: /etc/temporal/certs/frontend/tls.crt
+          keyFile: /etc/temporal/certs/frontend/tls.key
+          requireClientAuth: false
+        client:
+          serverName: "temporal-frontend.{{ temporal_namespace }}.svc.cluster.local"
+          rootCaFiles:
+            - /etc/temporal/certs/frontend/ca.crt
+{% endif %}
+
+    persistence:
+{% if temporal_database == "yugabyte" %}
+      defaultStore: yugabyte
+      default:
+        driver: custom
+{% endif %}
+{% if temporal_database == "cassandra" %}
+      default:
+        cassandra:
+          hosts: ["cassandra"]
+          port: 9042
+          user: "cassandra"
+          existingSecret: temporal-cassandra-secret
+          replicationFactor: {{ temporal_cassandra_replication_factor }}
+{% endif %}
+      visibilityStore: es-visibility
+      visibility:
+        driver: elasticsearch
+      additionalStores:
+{% if temporal_database == "yugabyte" %}
+        yugabyte:
+          customDatastore:
+            name: "yugabyte"
+            options:
+              hosts:  "yugabyte-yb-tservers"
+              keyspace: {{ temporal_cassandra_keyspace }}
+              replicationFactor: {{ temporal_cassandra_replication_factor }}
+              user: cassandra
+{% endif %}
+        es-visibility:
+          elasticsearch:
+            version: "v8"
+            url:
+              scheme: "https"
+              host: "temporal-elasticsearch-es-http:9200"
+            indices:
+              visibility: temporal_visibility_v1_dev
+            username: "elastic"
+            password: {{ temporal_elasticsearch_password }}
+            tls:
+              enabled: true
+              caFile: /etc/elasticsearch/ca.crt
+
+  dynamicConfig: {{ temporal_base_dynamic_config | ansible.builtin.combine(temporal_dynamic_config, recursive=true) }}
+  frontend:
+    replicaCount: {{ temporal_frontend_replicas }}
+    resources: {{ temporal_frontend_resources }}
+  history:
+    replicaCount: {{ temporal_history_replicas }}
+    resources: {{ temporal_history_resources }}
+  matching:
+    replicaCount: {{ temporal_matching_replicas }}
+    resources: {{ temporal_matching_resources }}
+  worker:
+    replicaCount: {{ temporal_worker_replicas }}
+    resources: {{ temporal_worker_resources }}
+
+  additionalVolumes:
+    - name: internode-cert
+      secret:
+        secretName: temporal-internode-certificate
+{% if temporal_tls_enabled %}
+    - name: frontend-cert
+      secret:
+        secretName: temporal-frontend-certificate
+{% endif %}
+    - name: elasticsearch-secrets
+      secret:
+        secretName: temporal-elasticsearch-certificate
+        items:
+          - key: ca.crt
+            path: ca.crt
+
+  additionalVolumeMounts:
+    - name: internode-cert
+      readOnly: true
+      mountPath: /etc/temporal/certs/internode
+{% if temporal_tls_enabled %}
+    - name: frontend-cert
+      readOnly: true
+      mountPath: /etc/temporal/certs/frontend
+{% endif %}
+    - name: elasticsearch-secrets
+      mountPath: /etc/elasticsearch
+      readOnly: true
+
+  additionalEnv:
+    - name: YUGABYTE_PASSWORD
+      value: cassandra
+    - name: CASSANDRA_PASSWORD
+      value: cassandra
+
+admintools:
+  image:
+    tag: {{ temporal_version }}
+  affinity: {{ temporal_affinity }}
+  nodeSelector: {{ temporal_nodeSelector }}
+  tolerations: {{ temporal_tolerations }}
+  additionalVolumes:
+{% if temporal_tls_enabled %}
+    - name: frontend-cert
+      secret:
+        secretName: temporal-frontend-certificate
+{% endif %}
+
+  additionalVolumeMounts:
+{% if temporal_tls_enabled %}
+    - name: frontend-cert
+      readOnly: true
+      mountPath: /etc/temporal/certs/frontend
+{% endif %}
+
+{% if temporal_tls_enabled %}
+  additionalEnv:
+    - name: TEMPORAL_TLS_CA
+      value: /etc/temporal/certs/frontend/ca.crt
+    - name: TEMPORAL_TLS_CERT
+      value: /etc/temporal/certs/frontend/tls.crt
+    - name: TEMPORAL_TLS_KEY
+      value: /etc/temporal/certs/frontend/tls.key
+{% endif %}
+
+schema:
+  createDatabase:
+    enabled: false
+  setup:
+    enabled: false
+  update:
+    enabled: false
+
+web:
+  enabled: true
+  affinity: {{ temporal_affinity }}
+  nodeSelector: {{ temporal_nodeSelector }}
+  tolerations: {{ temporal_tolerations }}
+
+{% if dns_suffix is defined %}
+  ingress:
+    enabled: true
+    hosts:
+      - {{ temporal_dns }}
+{% endif %}
+
+{% if temporal_tls_enabled %}
+  additionalVolumes:
+    - name: frontend-cert
+      secret:
+        secretName: temporal-frontend-certificate
+
+  additionalVolumeMounts:
+    - name: frontend-cert
+      readOnly: true
+      mountPath: /etc/temporal/certs/frontend
+
+  additionalEnv:
+    - name: TEMPORAL_TLS_CA
+      value: /etc/temporal/certs/frontend/ca.crt
+    - name: TEMPORAL_TLS_CERT
+      value: /etc/temporal/certs/frontend/tls.crt
+    - name: TEMPORAL_TLS_KEY
+      value: /etc/temporal/certs/frontend/tls.key
+{% endif %}
+
+elasticsearch:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+cassandra:
+  enabled: false
+mysql:
+  enabled: false

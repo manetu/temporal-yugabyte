@@ -1,0 +1,5 @@
+---
+dependencies:
+  - role: eck
+  - { role: yugabyte, when: temporal_database == "yugabyte" }
+  - { role: cassandra, when: temporal_database == "cassandra" }

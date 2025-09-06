@@ -1,0 +1,226 @@
+- name: Create VPC
+  amazon.aws.ec2_vpc_net:
+    name: "{{ aws_instance_name }}"
+    cidr_block: "{{ aws_vpc_cidr_block }}"
+    region: "{{ aws_region }}"
+  register: vpc
+
+- name: Update vpc_id
+  set_fact:
+    vpc_id: "{{ vpc.vpc.id }}"
+
+- name: Create subnets
+  amazon.aws.ec2_vpc_subnet:
+    state: present
+    region: "{{ aws_region }}"
+    vpc_id: "{{ vpc_id }}"
+    az: "{{ item.az }}"
+    cidr: "{{ item.cidr }}"
+    map_public: true
+    tags:
+      Name: "{{ aws_instance_name }}-{{ item.az }}"
+      kubernetes.io/role/elb: 1
+  loop: "{{ aws_vpc_subnets }}"
+  register: subnets
+
+- name: Update subnet_id
+  set_fact:
+    subnet_ids: "{{ subnets.results | map(attribute='subnet') | map(attribute='id') }}"
+
+- name: Create Internet gateway
+  amazon.aws.ec2_vpc_igw:
+    region: "{{ aws_region }}"
+    vpc_id: "{{ vpc_id }}"
+    tags:
+      Name: "{{ aws_instance_name }}"
+    state: present
+  register: igw
+
+- name: Create Route Table
+  amazon.aws.ec2_vpc_route_table:
+    region: "{{ aws_region }}"
+    vpc_id: "{{ vpc_id }}"
+    tags:
+      Name: "{{ aws_instance_name }}"
+    subnets: "{{ subnet_ids }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ igw.gateway_id }}"
+  register: route_table
+
+- name: Create SecurityGroup
+  amazon.aws.ec2_security_group:
+    name: "{{ aws_instance_name }}"
+    description: "{{ aws_instance_name }}"
+    region: "{{ aws_region }}"
+    vpc_id: "{{ vpc_id }}"
+    rules:
+      - proto: all
+        cidr_ip:
+          - "{{ aws_vpc_cidr_block }}"
+  register: sg
+
+- name: Update security_group
+  set_fact:
+    security_group: "{{ sg.group_id }}"
+
+- name: Create IAM EKS Cluster Role
+  amazon.aws.iam_role:
+    name: "{{ aws_instance_name }}-cluster"
+    managed_policies:
+      - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    assume_role_policy_document: |
+      {
+          "Version": "2012-10-17",
+          "Statement": {
+              "Effect": "Allow",
+              "Principal": { "Service": "eks.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+          }
+      }
+  register: cluster_role
+
+- name: Create EKS cluster
+  community.aws.eks_cluster:
+    name: "{{ aws_instance_name }}"
+    version: "{{ eks_version }}"
+    region: "{{ aws_region }}"
+    role_arn: "{{ cluster_role.iam_role.arn }}"
+    subnets: "{{ subnet_ids }}"
+    security_groups:
+      - "{{ security_group }}"
+    wait: true
+  register: eks
+
+- name: Create IAM EKS Node Role
+  amazon.aws.iam_role:
+    name: "{{ aws_instance_name }}-node"
+    managed_policies:  # see https://docs.aws.amazon.com/eks/latest/userguide/security-iam-awsmanpol.html
+      - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+      - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+      - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+      - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+    assume_role_policy_document: |
+      {
+          "Version": "2012-10-17",
+          "Statement": {
+              "Effect": "Allow",
+              "Principal": { "Service": "ec2.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+          }
+      }
+  register: node_role
+
+- name: Create EKS Node Group
+  community.aws.eks_nodegroup:
+    name: "{{ aws_instance_name + '-' + item.name }}"
+    state: present
+    region: "{{ aws_region }}"
+    cluster_name: "{{ aws_instance_name }}"
+    node_role: "{{ node_role.iam_role.arn }}"
+    subnets: "{{ subnet_ids }}"
+    scaling_config: "{{ item.scaling_config | default(aws_scaling_config) }}"
+    disk_size: "{{ item.disk_size | default(aws_disk_size) }}"
+    ami_type: "{{ item.ami_type | default(aws_ami_type) }}"
+    instance_types: "{{ item.instance_types | default(aws_instance_types) }}"
+    capacity_type: "{{ item.capacity_type | default(aws_capacity_type) }}"
+    taints: "{{ item.taints | default([]) }}"
+    tags:
+      Name: "{{ aws_instance_name + '-' + item.name }}"
+    wait: true
+  loop: "{{ aws_nodegroups }}"
+
+- name: Install KUBECONFIG
+  shell: eksctl utils write-kubeconfig --kubeconfig=$HOME/.kube/config  --name {{ aws_instance_name }} --region {{ aws_region }}
+
+- name: Get current aws-auth
+  when: aws_additional_admins.roles is defined
+  kubernetes.core.k8s_info:
+    kind: ConfigMap
+    namespace: kube-system
+    name: aws-auth
+  register: awsauth
+
+- when: aws_additional_admins.roles is defined
+  set_fact:
+    existing_roles: "{{ awsauth.resources | map(attribute='data') | map(attribute='mapRoles') | first | from_yaml | list}}"
+
+- when: aws_additional_admins.roles is defined
+  set_fact:
+    new_roles: '{{ (new_roles | default([]))  + [_doc] }}'
+  loop: "{{ aws_additional_admins.roles }}"
+  vars:
+    _doc: {groups: ["system:masters"], rolearn: "{{item}}", username: "{{item}}"}
+
+- name: Update aws-auth
+  when: aws_additional_admins.roles is defined
+  kubernetes.core.k8s_json_patch:
+    kind: ConfigMap
+    namespace: kube-system
+    name: aws-auth
+    patch:
+      - op: replace
+        path: /data/mapRoles
+        value: "{{ ([existing_roles[0]] + new_roles) | to_yaml }}"
+
+- name: Add the EBS CSI Driver helm repo
+  kubernetes.core.helm_repository:
+    name: aws-ebs-csi-driver
+    repo_url: "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+
+- name: Install EBS CSI Driver chart
+  kubernetes.core.helm:
+    name: aws-ebs-csi-driver
+    chart_ref: aws-ebs-csi-driver/aws-ebs-csi-driver
+    release_namespace: kube-system
+
+- name: Create 'default' StorageClass
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: StorageClass
+      apiVersion: storage.k8s.io/v1
+      metadata:
+        name: default
+      provisioner: ebs.csi.aws.com
+      volumeBindingMode: WaitForFirstConsumer
+      parameters:
+        csi.storage.k8s.io/fstype: xfs
+        type: gp3
+        iops: "{{ aws_storage_default_iops | quote }}"
+        throughput: "{{ aws_storage_default_throughput | quote }}"
+
+- name: Create 'premium' StorageClass
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: StorageClass
+      apiVersion: storage.k8s.io/v1
+      metadata:
+        name: premium
+      provisioner: ebs.csi.aws.com
+      volumeBindingMode: WaitForFirstConsumer
+      parameters:
+        csi.storage.k8s.io/fstype: xfs
+        type: io2
+        iops: "{{ aws_storage_premium_iops | quote }}"
+
+- name: Add Cloudwatch chart repo
+  when: aws_cloudwatch_enabled
+  kubernetes.core.helm_repository:
+    name: aws-observability
+    repo_url: "https://aws-observability.github.io/helm-charts"
+
+- name: Install Cloudwatch
+  when: aws_cloudwatch_enabled
+  kubernetes.core.helm:
+    name: amazon-cloudwatch-observability
+    chart_ref: aws-observability/amazon-cloudwatch-observability
+    chart_version: "{{ aws_cloudwatch_version }}"
+    create_namespace: true
+    release_namespace: "{{ aws_cloudwatch_namespace }}"
+    wait: true
+    values:
+      clusterName: "{{ aws_instance_name }}"
+      region: "{{ aws_region }}"

@@ -1,0 +1,2 @@
+elastic_cloud_version: 2.13.0
+elastic_cloud_install: true  # set to 'false' if ECK operator is already installed on the cluster

@@ -1,0 +1,15 @@
+- name: "Set defaults"
+  hosts: all
+  tasks:
+    - set_fact:
+        dns_suffix: k8s.orb.local
+        default_storage_class: local-path
+
+- name: Deploy k8s infrastructure
+  hosts: config_host
+  roles:
+    - python
+    - traefik
+
+- name: Deploy Benchmark Stack
+  import_playbook: benchmark.yml

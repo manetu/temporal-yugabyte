@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: benchmark-temporal-init
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark-temporal-init
+          image: temporalio/admin-tools:1.27.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend:7233
+            - name: TEMPORAL_NAMESPACE
+              value: {{ benchmark_temporal_namespace }}
+{% if temporal_tls_enabled %}
+            - name: TEMPORAL_TLS_CA
+              value: /etc/temporal/ca.crt
+          volumeMounts:
+            - name: temporal-secrets
+              mountPath: /etc/temporal
+              readOnly: true
+{% endif %}
+          command:
+            - bash
+            - -c
+            - |
+                set -x
+              
+                until temporal operator cluster health | grep -q SERVING; do
+                  echo "Waiting for Temporal server to start..."
+                  sleep 1
+                done
+                echo "Temporal service ready."
+              
+                temporal operator namespace describe --namespace $TEMPORAL_NAMESPACE
+                RETVAL=$?
+                if [ ! $RETVAL -eq 0 ]; then
+                    echo "namespace describe fails with $RETVAL, attempt create"
+                    #assume not found, and try to create
+                    temporal operator namespace create --namespace $TEMPORAL_NAMESPACE
+                    RETVAL=$?
+                    echo "namespace create returns $RETVAL"
+                fi
+              
+                exit $RETVAL
+{% if temporal_tls_enabled %}
+        volumes:
+          - name: temporal-secrets
+            secret:
+              secretName: temporal-frontend-certificate
+{% endif %}
+

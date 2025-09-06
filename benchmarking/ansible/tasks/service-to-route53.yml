@@ -1,0 +1,20 @@
+- name: Discover Service DNS
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    namespace: "{{ aws_route53_namespace }}"
+    name: "{{ aws_route53_service }}"
+    wait: true
+  register: service
+
+- name: Get Service DNS
+  set_fact:
+    service_dns: "{{ service.resources[0].status.loadBalancer.ingress[0].hostname }}"
+
+- name: Register Management DNS with Route53
+  amazon.aws.route53:
+    state: present
+    zone: "{{ aws_route53_zone }}"
+    record: "{{ aws_route53_record }}"
+    type: CNAME
+    value: "{{ service_dns }}"

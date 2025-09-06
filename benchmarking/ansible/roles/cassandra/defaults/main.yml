@@ -1,0 +1,26 @@
+cassandra_version: 0.15.4
+cassandra_namespace: temporal-benchmark
+cassandra_replicas: 3
+cassandra_seed_size: 2
+cassandra_num_tokens: 256
+cassandra_max_heap_size: 2048M
+cassandra_heap_new_size: 512M
+cassandra_storage_size: 10Gi
+cassandra_storage_class: "{{ default_storage_class | default('default') }}"
+cassandra_user: cassandra
+cassandra_password: cassandra
+cassandra_affinity: "{{ default_affinity | default({}) }}"
+cassandra_nodeSelector: "{{ default_nodeSelector | default({}) }}"
+cassandra_tolerations: "{{ default_tolerations | default([]) }}"
+  # - key: dedicated
+  #   operator: Equal
+  #   value: experimental
+  #   effect: NoSchedule
+
+cassandra_resources:
+  requests:
+    memory: 8Gi
+    cpu: 4
+  limits:
+    memory: 16Gi
+    cpu: 12
