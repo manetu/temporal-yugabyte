@@ -1,0 +1,127 @@
+- name: Delete EKS environment
+  gather_facts: false
+  hosts: config_host
+  roles:
+    - python
+  tasks:
+    - name: Remove K8s Namespaces with PVCs and LBs
+      kubernetes.core.k8s:
+        state: absent
+        kind: Namespace
+        name: "{{ item }}"
+      loop:
+        - temporal-benchmark
+        - traefik-system
+      ignore_errors: true
+
+    - name: Delete Management DNS on Route53
+      when:
+        - aws_route53_zone is defined
+        - dns_suffix is defined
+      amazon.aws.route53:
+        state: absent
+        zone: "{{ aws_route53_zone }}"
+        record: "*.{{ dns_suffix }}"
+        type: CNAME
+
+    - name: Delete EKS Node Group
+      community.aws.eks_nodegroup:
+        state: absent
+        name: "{{ aws_instance_name + '-' + item }}"
+        region: "{{ aws_region }}"
+        cluster_name: "{{ aws_instance_name }}"
+        wait: true
+      loop: "{{ aws_nodegroups | default([ (dict(name='primary')) ]) | map(attribute='name') | list }}"
+
+    - name: Delete IAM EKS Node Role
+      amazon.aws.iam_role:
+        state: absent
+        name: "{{ aws_instance_name }}-node"
+        delete_instance_profile: true
+
+    - name: Delete EKS cluster
+      community.aws.eks_cluster:
+        state: absent
+        name: "{{ aws_instance_name }}"
+        region: "{{ aws_region }}"
+        wait: true
+
+    - name: Delete IAM EKS Cluster Role
+      amazon.aws.iam_role:
+        state: absent
+        name: "{{ aws_instance_name }}-cluster"
+        delete_instance_profile: true
+
+    - name: Delete SecurityGroup
+      amazon.aws.ec2_security_group:
+        state: absent
+        name: "{{ aws_instance_name }}"
+        region: "{{ aws_region }}"
+
+    - name: Discover vpc_id
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ aws_instance_name }}"
+      register: vpc
+
+    - name: Update vpc_ids
+      set_fact:
+        vpc_ids: "{{ vpc.vpcs | map(attribute='vpc_id') }}"
+
+    - name: Discover route tables
+      amazon.aws.ec2_vpc_route_table_info:
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ item }}"
+          "tag:Name": "{{ aws_instance_name }}"
+      loop: "{{ vpc_ids }}"
+      register: route_tables
+
+    - name: Update route_table_ids
+      set_fact:
+        route_table_ids: "{{ route_tables.results | map(attribute='route_tables') | flatten | map(attribute='route_table_id')}}"
+
+    - name: Delete Route Table
+      amazon.aws.ec2_vpc_route_table:
+        state: absent
+        region: "{{ aws_region }}"
+        lookup: id
+        route_table_id: "{{ item }}"
+      loop: "{{ route_table_ids }}"
+
+    - name: Delete Internet gateway
+      amazon.aws.ec2_vpc_igw:
+        state: absent
+        region: "{{ aws_region }}"
+        vpc_id: "{{ item }}"
+      loop: "{{ vpc_ids }}"
+
+    - name: Discover subnets
+      amazon.aws.ec2_vpc_subnet_info:
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ item }}"
+      loop: "{{ vpc_ids }}"
+      register: subnets
+
+    - name: Update subnets
+      set_fact:
+        subnets: "{{ subnets.results | map(attribute='subnets') | flatten }}"
+
+    - name: Delete subnets
+      amazon.aws.ec2_vpc_subnet:
+        state: absent
+        region: "{{ aws_region }}"
+        vpc_id: "{{ item.vpc_id }}"
+        cidr: "{{ item.cidr_block }}"
+        wait: true
+      loop: "{{ subnets }}"
+
+    - name: Delete VPC
+      amazon.aws.ec2_vpc_net:
+        state: absent
+        name: "{{ aws_instance_name }}"
+        region: "{{ aws_region }}"
+        vpc_id: "{{ item }}"
+      loop: "{{ vpc_ids }}"

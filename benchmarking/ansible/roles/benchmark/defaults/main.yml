@@ -1,0 +1,6 @@
+benchmark_version: 0.0.4
+benchmark_k8s_namespace: temporal-benchmark
+benchmark_temporal_namespace: benchmark
+benchmark_replicas: 3
+
+temporal_tls_enabled: false

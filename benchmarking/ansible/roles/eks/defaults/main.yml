@@ -1,0 +1,40 @@
+eks_version: "1.31"
+
+aws_vpc_cidr_block: 10.200.0.0/16
+aws_vpc_subnets:
+  - {cidr: 10.200.0.0/18, az: "{{ aws_region }}a"}
+  - {cidr: 10.200.64.0/18, az: "{{ aws_region }}b"}
+  - {cidr: 10.200.128.0/18, az: "{{ aws_region }}c"}
+aws_instance_types:
+  - m7i.4xlarge
+aws_capacity_type: 'ON_DEMAND' ## 'ON_DEMAND' or 'SPOT'
+aws_disk_size: 100
+aws_ami_type: 'AL2_x86_64'
+aws_nodegroups:
+  - name: primary
+    #instance_types: # inherits aws_instance_types if not specified
+    #  - m7i.4xlarge
+    #scaling_config: # inherits aws_scaling_config if not specified
+    #  min_size: 1
+    #  max_size: 6
+    #  desired_size: 6
+    #capacity_type: 'ON_DEMAND' # inherits aws_capacity_type if not specified
+    #disk_size: 100 # inherits aws_disk_size if not specified
+    #ami_type: 'AL2_x86_64' # inherits aws_ami_type if not specified
+    #taints:
+    #  - key: mytaint
+    #    value: "true"
+    #    effect: NO_SCHEDULE # must be one of NO_SCHEDULE, NO_EXECUTE, PREFER_NO_SCHEDULE
+
+aws_storage_default_iops: "16000"
+aws_storage_default_throughput: "1000"
+aws_storage_premium_iops: "4000"
+
+aws_cloudwatch_enabled: false
+aws_cloudwatch_version: 2.6.0
+aws_cloudwatch_namespace: amazon-cloudwatch
+
+aws_additional_admins: {} ## arns added here will gain system:masters level kubectl access
+#  roles:
+#    - arn:foo
+#    - arn:bar

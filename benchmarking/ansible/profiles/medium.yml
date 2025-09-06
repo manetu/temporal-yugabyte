@@ -1,0 +1,59 @@
+yugabyte_resources:
+  master:
+    requests:
+      cpu: 100m
+      memory: 500Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  tserver:
+    requests:
+      cpu: 15
+      memory: 32Gi
+    limits:
+      cpu: 16
+      memory: 60Gi
+
+cassandra_max_heap_size: 32768M
+cassandra_resources:
+  requests:
+    memory:  32Gi
+    cpu:  15
+  limits:
+    memory: 60Gi
+    cpu: 16
+
+temporal_frontend_resources:
+  requests:
+    cpu: 550m
+    memory: 250Mi
+  limits:
+    cpu: 2
+    memory: 1Gi
+
+temporal_matching_resources:
+  requests:
+    cpu: 350m
+    memory: 250Mi
+  limits:
+    cpu: 2
+    memory: 1Gi
+
+temporal_history_shards: 4096 # Max 4096 per temporal
+temporal_history_resources:
+  requests:
+    cpu: 1200m
+    memory: 3Gi
+  limits:
+    cpu: 4
+    memory: 6Gi
+
+# see https://docs.temporal.io/references/dynamic-configuration#service-level-rps-limits
+temporal_dynamic_config:
+  matching.numTaskqueueReadPartitions:
+  - value: 10                              # default: 4
+    constraints: {}
+  matching.numTaskqueueWritePartitions:
+  - value: 10                              # default: 4
+    constraints: {}
+

@@ -1,0 +1,16 @@
+- name: Initialize Temporal Namespace
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ benchmark_k8s_namespace }}"
+    definition: "{{ lookup('template', 'temporal-init.yml') | from_yaml }}"
+    wait: yes
+    wait_timeout: 300
+    wait_condition:
+      type: Complete
+      status: True
+
+- name: Deploy Benchmark Worker
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ benchmark_k8s_namespace }}"
+    definition: "{{ lookup('template', 'worker.yml') | from_yaml }}"

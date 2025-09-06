@@ -1,0 +1,33 @@
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: temporal-elasticsearch
+spec:
+  version: {{ temporal_elasticsearch_version }}
+  auth:
+    fileRealm:
+    - secretName: temporal-elasticsearch-credentials
+  nodeSets:
+  - name: default
+    count: {{ temporal_elasticsearch_replicas }}
+    config:
+      node.store.allow_mmap: false
+    podTemplate:
+      spec:
+        affinity: {{ temporal_elasticsearch_affinity }}
+        nodeSelector: {{ temporal_elasticsearch_nodeSelector }}
+        tolerations: {{ temporal_elasticsearch_tolerations }}
+    volumeClaimTemplates:
+     - metadata:
+         name: elasticsearch-data # Do not change this name: see https://www.elastic.co/guide/en/cloud-on-k8s/master/k8s-volume-claim-templates.html
+       spec:
+         accessModes:
+         - ReadWriteOnce
+         resources:
+           requests:
+             storage: {{ temporal_elasticsearch_storage_size }}
+         storageClassName: {{ temporal_elasticsearch_storage_class }}
+  http:
+    tls:
+      certificate:
+        secretName: temporal-elasticsearch-certificate

@@ -1,0 +1,42 @@
+yugabyte_tserver_replicas: 6
+yugabyte_resources:
+  master:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  tserver:
+    requests:
+      cpu: 14
+      memory: 32Gi
+    limits:
+      cpu: 16
+      memory: 32Gi
+
+cassandra_replicas: 6
+cassandra_resources:
+  requests:
+    memory: 32Gi
+    cpu: 14
+  limits:
+    memory: 32Gi
+    cpu: 16
+
+temporal_server_replicas: 5
+temporal_frontend_replicas: 18
+temporal_matching_replicas: 18
+temporal_worker_replicas: 5
+
+temporal_history_replicas: 18
+temporal_history_resources: {}
+temporal_history_shards: 3000
+
+temporal_dynamic_config:
+  matching.numTaskqueueReadPartitions:
+  - value: 20
+    constraints: {}
+  matching.numTaskqueueWritePartitions:
+  - value: 20
+    constraints: {}

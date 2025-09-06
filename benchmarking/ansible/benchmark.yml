@@ -1,0 +1,6 @@
+- name: Deploy Temporal Benchmark Stack
+  hosts: config_host
+  roles:
+    - cert-manager
+    - temporal
+    - benchmark

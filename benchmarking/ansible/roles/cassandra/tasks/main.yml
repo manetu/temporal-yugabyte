@@ -1,0 +1,61 @@
+- name: Add Cassandra chart repo
+  kubernetes.core.helm_repository:
+    name: incubator
+    repo_url: "https://charts.helm.sh/incubator"
+
+- name: Create namespace
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ cassandra_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ cassandra_namespace }}"
+
+- name: Create admin credentials secret
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ cassandra_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: cassandra-admin-password
+      type: Opaque
+      data:
+        cassandra-password: "{{ cassandra_password | b64encode }}"
+
+- name: Install Cassandra
+  kubernetes.core.helm:
+    name: cassandra
+    chart_ref: incubator/cassandra
+    chart_version: "{{ cassandra_version }}"
+    release_namespace: "{{ cassandra_namespace }}"
+    values:
+      affinity: "{{ cassandra_affinity | from_yaml }}"
+      nodeSelector: "{{ cassandra_nodeSelector | from_yaml }}"
+      tolerations: "{{ cassandra_tolerations | from_yaml }}"
+      config:
+        cluster_size: "{{ cassandra_replicas }}"
+        seed_size: "{{ cassandra_seed_size }}"
+        num_tokens: "{{ cassandra_num_tokens }}"
+        max_heap_size: "{{ cassandra_max_heap_size }}"
+        heap_new_size: "{{ cassandra_heap_new_size }}"
+      persistence:
+        enabled: "{{ storage_enabled | default('true') }}"
+        size: "{{ cassandra_storage_size }}"
+        storageClass: "{{ cassandra_storage_class }}"
+      resources: "{{ cassandra_resources }}"
+
+- name: Wait for Cassandra pods
+  kubernetes.core.k8s_info:
+    namespace: "{{ cassandra_namespace }}"
+    kind: Pod
+    field_selectors:
+      - status.phase=Running
+    name: "{{ 'cassandra-' + item|string }}"
+    wait: yes
+    wait_sleep: 10
+    wait_timeout: 360
+  loop: "{{ range(0, cassandra_replicas) }}"

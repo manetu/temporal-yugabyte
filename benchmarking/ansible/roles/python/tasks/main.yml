@@ -1,0 +1,7 @@
+- name: Ensure PIP dependencies are installed
+  ansible.builtin.pip:
+    name:
+      - kubernetes
+      - botocore
+      - boto3
+      - passlib

@@ -1,0 +1,19 @@
+yugabyte_master_replicas: 1
+yugabyte_tserver_replicas: 1
+
+cassandra_replicas: 1
+cassandra_seed_size: 0
+cassandra_num_tokens: 4
+cassandra_max_heap_size: 512M
+cassandra_heap_new_size: 128M
+
+temporal_server_replicas: 1
+temporal_frontend_replicas: 1
+temporal_history_replicas: 1
+temporal_matching_replicas: 1
+temporal_worker_replicas: 1
+temporal_elasticsearch_replicas: 1
+temporal_cassandra_replication_factor: 1
+temporal_history_shards: 500
+
+benchmark_replicas: 1

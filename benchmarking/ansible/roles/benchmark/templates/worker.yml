@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-worker
+  labels:
+    app: benchmark-worker
+spec:
+  replicas: {{ benchmark_replicas }}
+  selector:
+    matchLabels:
+      app: benchmark-worker
+  template:
+    metadata:
+      labels:
+        app: benchmark-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/manetu/temporal-benchmark:{{ benchmark_version }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--temporal-target=temporal-frontend:7233"
+{% if temporal_tls_enabled %}
+            - "--temporal-tls=true"
+            - "--temporal-ca=/etc/temporal/ca.crt"
+{% endif %}
+            - "--temporal-namespace={{ benchmark_temporal_namespace }}"
+            - "worker"
+{% if temporal_tls_enabled %}
+          volumeMounts:
+            - name: temporal-secrets
+              mountPath: /etc/temporal
+              readOnly: true
+      volumes:
+        - name: temporal-secrets
+          secret:
+            secretName: temporal-frontend-certificate
+{% endif %}

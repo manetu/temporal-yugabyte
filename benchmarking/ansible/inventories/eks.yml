@@ -1,0 +1,57 @@
+all:
+  vars:
+    aws_region: us-east-2
+    aws_instance_name: greg
+    aws_route53_zone: eng.manetu.io
+    dns_suffix: eng.manetu.io
+    aws_instance_types:
+      - m7i.4xlarge
+    aws_scaling_config:
+      min_size: 1
+      max_size: 6
+      desired_size: 6
+    aws_nodegroups:
+      - name: primary
+        scaling_config:
+          min_size: 1
+          max_size: 3
+          desired_size: 3
+      - name: database
+        aws_scaling_config:
+          min_size: 1
+          max_size: 6
+          desired_size: 6
+        taints:
+          - key: database
+            value: "true"
+            effect: NO_SCHEDULE
+    aws_cloudwatch_enabled: false
+
+    temporal_database: cassandra
+    #temporal_database: yugabyte
+
+    temporal_elastic_storage_size: 100Gi
+    yugabyte_master_storage_size: 10Gi
+    yugabyte_tserver_replicas: 6
+    yugabyte_tserver_storage_size: 200Gi
+    yugabyte_tserver_storage_class: premium
+    yugabyte_tserver_tolerations:
+      - key: database
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+    cassandra_replicas: 6
+    cassandra_storage_size: 200Gi
+    cassandra_storage_class: premium
+    cassandra_tolerations:
+      - key: database
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+config_host:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: /Users/ghaskins/ansible/python/bin/python

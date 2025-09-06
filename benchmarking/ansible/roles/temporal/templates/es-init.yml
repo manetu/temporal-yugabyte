@@ -1,0 +1,81 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-es-init
+spec:
+  template:
+    metadata:
+      name: temporal-es-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext: {}
+      serviceAccountName: default
+      affinity: {{ temporal_affinity }}
+      nodeSelector: {{ temporal_nodeSelector }}
+      tolerations: {{ temporal_tolerations }}
+      initContainers:
+        - name: waitfor-visibilitystore
+          image: {{ temporal_schema_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -eux
+
+              until curl $CURL_OPTS --silent --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT 2>&1 > /dev/null; do echo waiting for elasticsearch to start; sleep 1; done;
+          env:
+            - name: CURL_OPTS
+              value: -k  # FIXME
+            - name: ES_SCHEME
+              value: https
+            - name: ES_HOST
+              value: temporal-elasticsearch-es-http
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: elastic
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-elasticsearch-credentials
+                  key: password
+      containers:
+        - name: temporal-visibilitystore-init
+          image: {{ temporal_schema_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -eux
+
+              curl $CURL_OPTS -X PUT --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/_template/temporal_visibility_v1_template -H "Content-Type: application/json" --data-binary "@$TEMPORAL_SCHEMA_PATH/elasticsearch/visibility/index_template_$ES_VERSION.json" --write-out "\n";
+
+              curl $CURL_OPTS --head --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX ||
+              curl $CURL_OPTS -X PUT --fail --user "$ES_USER:$ES_PWD" $ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX --write-out "\n";
+          env:
+            - name: CURL_OPTS
+              value: -k  # FIXME
+            - name: ES_SCHEME
+              value: https
+            - name: ES_HOST
+              value: temporal-elasticsearch-es-http
+            - name: ES_PORT
+              value: "9200"
+            - name: ES_USER
+              value: elastic
+            - name: ES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-elasticsearch-credentials
+                  key: password
+            - name: ES_VERSION
+              value: v7
+            - name: ES_VISIBILITY_INDEX
+              value: temporal_visibility_v1_dev
+          #volumeMounts:
+          #  - mountPath: /etc/elasticsearch
+          #    name: temporal-elasticsearch-certs
+          #    readOnly: true
+          resources: {}

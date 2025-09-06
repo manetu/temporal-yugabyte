@@ -1,0 +1,58 @@
+yugabyte_version: 2025.1.0
+yugabyte_namespace: temporal-benchmark
+
+yugabyte_master_affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: yb-master
+        topologyKey: kubernetes.io/hostname
+
+yugabyte_nodeSelector: "{{ default_nodeSelector | default({}) }}"
+yugabyte_master_tolerations: "{{ default_tolerations | default([]) }}"
+  # - key: dedicated
+  #   operator: Equal
+  #   value: experimental
+  #   effect: NoSchedule
+yugabyte_master_replicas: 3
+yugabyte_master_storage_size: 10Gi
+yugabyte_master_storage_class: "{{ default_storage_class | default('default') }}"
+
+yugabyte_tserver_affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: yb-tserver
+        topologyKey: kubernetes.io/hostname
+
+yugabyte_tserver_tolerations: "{{ default_tolerations | default([]) }}"
+  # - key: dedicated
+  #   operator: Equal
+  #   value: experimental
+  #   effect: NoSchedule
+yugabyte_tserver_replicas: 3
+yugabyte_tserver_storage_size: 10Gi
+yugabyte_tserver_storage_class: "{{ default_storage_class | default('default') }}"
+yugabyte_loadbalancer: false
+yugabyte_cql_auth_enabled: true
+yugabyte_resources:
+  master:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  tserver:
+    requests:
+      cpu: 4
+      memory: 8Gi
+    limits:
+      cpu: 12
+      memory: 16Gi

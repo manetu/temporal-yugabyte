@@ -1,0 +1,32 @@
+- name: Create ~/.kube
+  file:
+    path: ~/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy KUBECONFIG
+  copy:
+    remote_src: true
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: ~/.kube/config
+    mode: '0600'
+
+- name: Install PIP
+  become: true
+  apt:
+    pkg:
+      - python3-pip
+
+- name: Install kubernetes client
+  pip:
+    name: kubernetes
+
+- name: Install passlib
+  pip:
+    name: passlib
+
+- name: Install Helm
+  become: yes
+  shell: |
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | DESIRED_VERSION="v3.17.4" bash
+    chmod a+x /usr/local/bin/helm
