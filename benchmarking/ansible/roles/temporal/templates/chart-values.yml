@@ -8,6 +8,13 @@ server:
   affinity: {{ temporal_affinity }}
   nodeSelector: {{ temporal_nodeSelector }}
   tolerations: {{ temporal_tolerations }}
+{% if monitoring_enabled %}
+  metrics:
+    serviceMonitor:
+      enabled: true
+      interval: 10s
+      additionalLabels: {{ prometheus_monitor_labels | from_yaml }}
+{% endif %}
   replicaCount: {{ temporal_server_replicas }}
   config:
     numHistoryShards: {{ temporal_history_shards }}

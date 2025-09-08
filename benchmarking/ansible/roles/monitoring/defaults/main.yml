@@ -1,0 +1,15 @@
+monitoring_enabled: true
+
+grafana_version: 8.8.2
+grafana_replicas: 1
+grafana_storage_class: "{{ default_storage_class | default('default') }}"
+grafana_storage_size: 10Gi
+grafana_dns: grafana.{{ dns_suffix }}
+
+prometheus_version: 67.8.0
+prometheus_datasource_url: http://prometheus-kube-prometheus-prometheus:9090
+prometheus_replicas: 3
+prometheus_storage_class: "{{ default_storage_class | default('default') }}"
+prometheus_storage_size: 10Gi
+prometheus_retention: 1d
+prometheus_dns: prometheus.{{ dns_suffix }}

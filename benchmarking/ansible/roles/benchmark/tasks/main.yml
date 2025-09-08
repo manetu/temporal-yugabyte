@@ -14,3 +14,10 @@
     state: present
     namespace: "{{ benchmark_k8s_namespace }}"
     definition: "{{ lookup('template', 'worker.yml') | from_yaml }}"
+
+- name: Deploy Benchmark Worker ServiceMonitor
+  when: monitoring_enabled
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ benchmark_k8s_namespace }}"
+    definition: "{{ lookup('template', 'servicemonitor.yml') | from_yaml }}"

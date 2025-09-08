@@ -18,6 +18,10 @@ spec:
         - name: worker
           image: ghcr.io/manetu/temporal-benchmark:{{ benchmark_version }}
           imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
           args:
             - "--temporal-target=temporal-frontend:7233"
 {% if temporal_tls_enabled %}
@@ -26,6 +30,7 @@ spec:
 {% endif %}
             - "--temporal-namespace={{ benchmark_temporal_namespace }}"
             - "worker"
+            - "--metrics-enabled"
 {% if temporal_tls_enabled %}
           volumeMounts:
             - name: temporal-secrets

@@ -1,3 +1,6 @@
+grafana_replicas: 1
+prometheus_replicas: 1
+
 yugabyte_master_replicas: 1
 yugabyte_tserver_replicas: 1
 
