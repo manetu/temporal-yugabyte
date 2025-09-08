@@ -1,7 +1,7 @@
 all:
   vars:
-    #temporal_database: yugabyte
-    temporal_database: cassandra
+    temporal_database: yugabyte
+    #temporal_database: cassandra
 
 config_host:
   hosts:

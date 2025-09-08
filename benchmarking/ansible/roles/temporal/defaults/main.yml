@@ -124,3 +124,5 @@ temporal_dynamic_config: {}  # merged with temporal_base_dynamic_config
 #    constraints: {}
 
 storage_enabled: true
+monitoring_enabled: true
+prometheus_monitor_labels: {}

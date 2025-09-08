@@ -56,3 +56,6 @@ yugabyte_resources:
     limits:
       cpu: 12
       memory: 16Gi
+
+monitoring_enabled: true
+prometheus_monitor_labels: {}

@@ -1,0 +1,168 @@
+- name: Add Grafana Helm repository
+  kubernetes.core.helm_repository:
+    name: grafana
+    repo_url: "https://grafana.github.io/helm-charts"
+
+- name: Add Prometheus Helm repository
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: "https://prometheus-community.github.io/helm-charts"
+
+- name: Create monitoring namespace
+  kubernetes.core.k8s:
+    state: present
+    namespace: monitoring
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: monitoring
+
+- name: Install Grafana using Helm
+  kubernetes.core.helm:
+    name: grafana
+    chart_ref: grafana/grafana
+    chart_version: "{{ grafana_version }}"
+    release_namespace: monitoring
+    values:
+      datasources:
+        datasources.yaml:
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: "{{ prometheus_datasource_url }}"
+      grafana.ini:
+        auth.anonymous:
+          enabled: true
+          org_role: Admin
+        auth.basic:
+          enabled: false
+        auth:
+          disable_login_form: true
+      dashboardProviders:
+        dashboardproviders.yaml:
+          apiVersion: 1
+          providers:
+          - name: 'dashboards'
+            orgId: 1
+            type: file
+            disableDeletion: false
+            allowUiUpdates: true
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards
+              foldersFromFilesStructure: true
+          - name: 'temporal'
+            orgId: 1
+            type: file
+            disableDeletion: false
+            folder: 'temporal'
+            allowUiUpdates: true
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/temporal
+          - name: 'yugabyte'
+            orgId: 1
+            type: file
+            disableDeletion: false
+            folder: 'yugabyte'
+            allowUiUpdates: true
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/yugabyte
+          - name: 'kubernetes'
+            orgId: 1
+            type: file
+            disableDeletion: false
+            folder: 'kubernetes'
+            allowUiUpdates: true
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/kubernetes
+      dashboards:
+        kubernetes:
+          k8s-views-global:
+            gnetId: 15757
+            revision: 31
+            datasource: Prometheus
+          k8s-views-namespaces:
+            gnetId: 15758
+            revision: 27
+            datasource: Prometheus
+          k8s-views-nodes:
+            gnetId: 15759
+            revision: 19
+            datasource: Prometheus
+          k8s-views-pods:
+            gnetId: 15760
+            revision: 22
+            datasource: Prometheus
+        manetu:
+          red_dashboard:
+            json: |
+              {{ lookup('file', 'red.json') | string }}
+        yugabyte:
+          yugabte-db:
+            gnetId: 12620
+            revision: 2
+            datasource: Prometheus
+        temporal:
+          server:
+            url: https://raw.githubusercontent.com/temporalio/dashboards/helm/server/server-general.json
+            datasource: Prometheus
+          sdk:
+            url: https://raw.githubusercontent.com/temporalio/dashboards/helm/sdk/sdk-general.json
+            datasource: Prometheus
+          misc-frontend-service-specific:
+            url: https://raw.githubusercontent.com/temporalio/dashboards/helm/misc/frontend-service-specific.json
+            datasource: Prometheus
+          misc-history-service-specific:
+            url: https://raw.githubusercontent.com/temporalio/dashboards/helm/misc/history-service-specific.json
+            datasource: Prometheus
+          misc-matching-service-specific:
+            url: https://raw.githubusercontent.com/temporalio/dashboards/helm/misc/matching-service-specific.json
+            datasource: Prometheus
+      replicas: "{{ grafana_replicas }}"
+      persistence:
+        enabled: true
+        storageClassName: "{{ grafana_storage_class }}"
+        size: "{{ grafana_storage_size }}"
+      useStatefulSet: true
+      ingress:
+        enabled: true
+        hosts:
+          - "{{ grafana_dns }}"
+        path: /
+
+- name: Install Prometheus using Helm
+  kubernetes.core.helm:
+    name: prometheus
+    chart_ref: prometheus-community/kube-prometheus-stack
+    chart_version: "{{ prometheus_version }}"
+    release_namespace: monitoring
+    values:
+      defaultRules:
+        create: true
+      prometheus:
+        ingress:
+          enabled: true
+          hosts:
+            - "{{ prometheus_dns }}"
+          paths:
+            - /
+        prometheusSpec:
+          replicas: "{{ prometheus_replicas }}"
+          podMonitorSelectorNilUsesHelmValues: false
+          serviceMonitorSelectorNilUsesHelmValues: false
+          ruleSelectorNilUsesHelmValues: false
+          retention: "{{ prometheus_retention }}"
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                storageClassName: "{{ prometheus_storage_class }}"
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: "{{ prometheus_storage_size }}"

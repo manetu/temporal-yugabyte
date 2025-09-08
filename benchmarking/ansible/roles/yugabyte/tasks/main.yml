@@ -51,6 +51,10 @@
           use_cassandra_authentication: "{{ yugabyte_cql_auth_enabled }}"
           ysql_enable_auth: true
           ysql_pg_conf_csv: password_encryption=scram-sha-256
+      serviceMonitor:
+        enabled: "{{ monitoring_enabled }}"
+        interval: 10s
+        extraLabels: "{{ prometheus_monitor_labels | from_yaml }}"
 
 - name: Wait for yb-masters
   kubernetes.core.k8s_info:

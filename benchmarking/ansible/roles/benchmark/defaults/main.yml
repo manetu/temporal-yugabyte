@@ -1,6 +1,9 @@
-benchmark_version: 0.0.4
+benchmark_version: 0.0.5
 benchmark_k8s_namespace: temporal-benchmark
 benchmark_temporal_namespace: benchmark
 benchmark_replicas: 3
 
 temporal_tls_enabled: false
+
+monitoring_enabled: true
+prometheus_monitor_labels: {}

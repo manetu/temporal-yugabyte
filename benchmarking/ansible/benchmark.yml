@@ -2,5 +2,6 @@
   hosts: config_host
   roles:
     - cert-manager
+    - monitoring
     - temporal
     - benchmark

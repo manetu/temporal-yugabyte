@@ -1,0 +1,2 @@
+- include_tasks: install.yml
+  when: monitoring_enabled
