@@ -39,13 +39,14 @@ temporal_matching_resources:
     cpu: 2
     memory: 1Gi
 
+temporal_history_replicas: 6
 temporal_history_shards: 4096 # Max 4096 per temporal
 temporal_history_resources:
   requests:
-    cpu: 1200m
+    cpu: 4
     memory: 3Gi
   limits:
-    cpu: 4
+    cpu: 7
     memory: 6Gi
 
 # see https://docs.temporal.io/references/dynamic-configuration#service-level-rps-limits
@@ -57,3 +58,4 @@ temporal_dynamic_config:
   - value: 10                              # default: 4
     constraints: {}
 
+benchmark_replicas: 12
