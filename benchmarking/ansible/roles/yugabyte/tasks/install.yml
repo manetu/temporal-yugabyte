@@ -1,0 +1,79 @@
+- name: Add Yugabyte chart repo
+  kubernetes.core.helm_repository:
+    name: yugabytedb
+    repo_url: "https://charts.yugabyte.com"
+
+- name: Create namespace
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ yugabyte_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ yugabyte_namespace }}"
+
+- name: Install Yugabyte
+  kubernetes.core.helm:
+    name: yugabyte
+    chart_ref: yugabytedb/yugabyte
+    chart_version: "{{ yugabyte_version }}"
+    release_namespace: "{{ yugabyte_namespace }}"
+    wait: true
+    values:
+      nodeSelector: "{{ yugabyte_nodeSelector | from_yaml }}"
+      master:
+        affinity: "{{ yugabyte_master_affinity | from_yaml }}"
+        tolerations: "{{ yugabyte_master_tolerations | from_yaml }}"
+        memoryLimitHardPercentage: 100
+      tserver:
+        affinity: "{{ yugabyte_tserver_affinity | from_yaml }}"
+        tolerations: "{{ yugabyte_tserver_tolerations | from_yaml }}"
+        memoryLimitHardPercentage: 100
+      replicas:
+        master: "{{ yugabyte_master_replicas }}"
+        tserver: "{{ yugabyte_tserver_replicas }}"
+      storage:
+        ephemeral: "{{ not storage_enabled | default('false') }}"
+        master:
+          count: 1
+          size: "{{ yugabyte_master_storage_size }}"
+          storageClass: "{{ yugabyte_master_storage_class }}"
+        tserver:
+          count: 1
+          size: "{{ yugabyte_tserver_storage_size }}"
+          storageClass: "{{ yugabyte_tserver_storage_class }}"
+      enableLoadBalancer: "{{ yugabyte_loadbalancer }}"
+      resource: "{{ yugabyte_resources | from_yaml }}"
+      oldNamingStyle: false
+      gflags:
+        tserver:
+          use_cassandra_authentication: "{{ yugabyte_cql_auth_enabled }}"
+          ysql_enable_auth: true
+          ysql_pg_conf_csv: password_encryption=scram-sha-256
+      serviceMonitor:
+        enabled: "{{ monitoring_enabled }}"
+        interval: 10s
+        extraLabels: "{{ prometheus_monitor_labels | from_yaml }}"
+
+- name: Wait for yb-masters
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ yugabyte_namespace }}"
+    name: "{{ 'yugabyte-yb-master-' + item|string }}"
+    field_selectors:
+      - status.phase=Running
+    wait: true
+  loop: "{{ range(0, yugabyte_master_replicas) }}"
+
+- name: Wait for yb-tservers
+  kubernetes.core.k8s_info:
+    namespace: "{{ yugabyte_namespace }}"
+    kind: Pod
+    field_selectors:
+      - status.phase=Running
+    name: "{{ 'yugabyte-yb-tserver-' + item|string }}"
+    wait: yes
+    wait_sleep: 10
+    wait_timeout: 360
+  loop: "{{ range(0, yugabyte_tserver_replicas) }}"

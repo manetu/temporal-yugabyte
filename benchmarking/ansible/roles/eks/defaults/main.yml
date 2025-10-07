@@ -7,6 +7,10 @@ aws_vpc_subnets:
   - {cidr: 10.200.128.0/18, az: "{{ aws_region }}c"}
 aws_instance_types:
   - m7i.4xlarge
+aws_scaling_config:
+  min_size: 1
+  max_size: 3
+  desired_size: 3
 aws_capacity_type: 'ON_DEMAND' ## 'ON_DEMAND' or 'SPOT'
 aws_disk_size: 100
 aws_ami_type: 'AL2_x86_64'

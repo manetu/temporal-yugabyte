@@ -28,7 +28,7 @@ spec:
               temporal-cassandra-tool update-schema --schema-dir $TEMPORAL_SCHEMA_PATH/yugabyte/temporal/versioned
           env:
             - name: CASSANDRA_HOST
-              value: yugabyte-yb-tservers
+              value: {{ temporal_yugabyte_hosts }}
             - name: CASSANDRA_PORT
               value: "9042"
             - name: CASSANDRA_KEYSPACE
