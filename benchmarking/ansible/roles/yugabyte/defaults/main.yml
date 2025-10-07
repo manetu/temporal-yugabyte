@@ -1,5 +1,6 @@
 yugabyte_version: 2025.1.0
 yugabyte_namespace: temporal-benchmark
+yugabyte_enabled: true
 
 yugabyte_master_affinity:
   podAntiAffinity:

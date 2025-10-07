@@ -29,6 +29,8 @@ temporal_tolerations: "{{ default_tolerations | default([]) }}"
 temporal_cassandra_replication_factor: 3
 temporal_cassandra_keyspace: temporal
 
+temporal_yugabyte_hosts: yugabyte-yb-tservers
+
 temporal_elasticsearch_version: 7.17.28
 temporal_elasticsearch_wait_timeout: 300
 temporal_elasticsearch_replicas: 3
