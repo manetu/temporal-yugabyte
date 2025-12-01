@@ -22,7 +22,7 @@ Most features(*) are code-complete, stable, and used in production. All code cha
 
 ## History
 
-[The Manetu Smart Data Platform](https://www.manetu.com/) relies heavily on various third-party frameworks and services, including Yugabyte and Temporal. The throughput, latency, scalability, and reliability of these components have a direct effect on the overall performance of the Manetu product. Therefore, we make every effort to tailor their use and configuration to achieve optimal results.
+[The Manetu Platform](https://www.manetu.com/) relies heavily on various third-party frameworks and services, including Yugabyte and Temporal. The throughput, latency, scalability, and reliability of these components have a direct effect on the overall performance of the Manetu product. Therefore, we make every effort to tailor their use and configuration to achieve optimal results.
 
 Temporal supports using either PostgreSQL or Cassandra as its [primary data store](https://docs.temporal.io/temporal-service/persistence#persistence). Since Yugabyte supports both [PostgreSQL](https://docs.yugabyte.com/preview/api/ysql/) and [Cassandra CQL](https://docs.yugabyte.com/preview/api/ycql/) APIs, it may appear straightforward to use Yugabyte as a replacement for the native versions.
 
