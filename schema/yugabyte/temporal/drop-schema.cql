@@ -9,6 +9,7 @@ DROP TABLE queue;
 DROP TABLE queue_metadata;
 DROP TABLE namespaces;
 DROP TABLE task_queue_user_data;
+DROP TABLE tasks_v2;
 DROP TABLE tasks;
 DROP TABLE history_tree;
 DROP TABLE history_node;

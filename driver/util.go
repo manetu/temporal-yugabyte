@@ -146,6 +146,16 @@ func applyWorkflowMutationTxn(
 		runID,
 	)
 
+	updateChasmNodes(
+		txn,
+		workflowMutation.UpsertChasmNodes,
+		workflowMutation.DeleteChasmNodes,
+		shardID,
+		namespaceID,
+		workflowID,
+		runID,
+	)
+
 	// transfer / replication / timer tasks
 	return applyTasks(
 		txn,
@@ -256,6 +266,15 @@ func applyWorkflowSnapshotTxnAsReset(
 		runID,
 	)
 
+	resetChasmNodes(
+		txn,
+		workflowSnapshot.ChasmNodes,
+		shardID,
+		namespaceID,
+		workflowID,
+		runID,
+	)
+
 	// transfer / replication / timer tasks
 	return applyTasks(
 		txn,
@@ -344,6 +363,16 @@ func applyWorkflowSnapshotTxnAsNew(
 	updateSignalsRequested(
 		txn,
 		workflowSnapshot.SignalRequestedIDs,
+		nil,
+		shardID,
+		namespaceID,
+		workflowID,
+		runID,
+	)
+
+	updateChasmNodes(
+		txn,
+		workflowSnapshot.ChasmNodes,
 		nil,
 		shardID,
 		namespaceID,
@@ -1033,4 +1062,62 @@ func createHistoryEventBatchBlob(
 	}
 
 	return eventBatch
+}
+
+func updateChasmNodes(
+	txn *gocql.Txn,
+	chasmNodes map[string]p.InternalChasmNode,
+	deleteKeys map[string]struct{},
+	shardID int32,
+	namespaceID string,
+	workflowID string,
+	runID string,
+) {
+	for nodeKey, node := range chasmNodes {
+		if node.CassandraBlob != nil {
+			txn.Query(templateUpdateChasmNodeQuery,
+				nodeKey,
+				node.CassandraBlob.Data,
+				node.CassandraBlob.EncodingType.String(),
+				shardID,
+				namespaceID,
+				workflowID,
+				runID)
+		}
+	}
+
+	for deleteKey := range deleteKeys {
+		txn.Query(templateDeleteChasmNodeQuery,
+			deleteKey,
+			shardID,
+			namespaceID,
+			workflowID,
+			runID)
+	}
+}
+
+func resetChasmNodes(
+	txn *gocql.Txn,
+	chasmNodes map[string]p.InternalChasmNode,
+	shardID int32,
+	namespaceID string,
+	workflowID string,
+	runID string,
+) {
+	nodeMap := make(map[string][]byte)
+	var encoding enumspb.EncodingType
+	for nodeKey, node := range chasmNodes {
+		if node.CassandraBlob != nil {
+			nodeMap[nodeKey] = node.CassandraBlob.Data
+			encoding = node.CassandraBlob.EncodingType
+		}
+	}
+
+	txn.Query(templateResetChasmNodesQuery,
+		nodeMap,
+		encoding.String(),
+		shardID,
+		namespaceID,
+		workflowID,
+		runID)
 }
