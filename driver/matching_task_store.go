@@ -550,19 +550,53 @@ func (d *MatchingTaskStore) UpdateTaskQueueUserData(
 
 	if err != nil {
 		if gocql.ConflictError(err) {
-			for _, update := range request.Updates {
-				if update.Conflicting != nil {
-					*update.Conflicting = true
-				}
-			}
-
-			return &p.ConditionFailedError{Msg: "Failed to update task queues: unknown conflict"}
+			return d.decodeUpdateTaskQueueUserDataConflict(ctx, request)
 		}
 
 		return err
 	}
 
 	return nil
+}
+
+func (d *MatchingTaskStore) decodeUpdateTaskQueueUserDataConflict(
+	ctx context.Context,
+	request *p.InternalUpdateTaskQueueUserDataRequest,
+) error {
+	// Query current versions to determine which specific updates conflicted
+	for taskQueue, update := range request.Updates {
+		if update.Conflicting == nil {
+			continue
+		}
+
+		query := d.Session.Query(templateGetTaskQueueUserDataQuery,
+			request.NamespaceID,
+			taskQueue,
+		).WithContext(ctx)
+
+		var version int64
+		var userDataBytes []byte
+		var encoding string
+		err := query.Scan(&userDataBytes, &encoding, &version)
+
+		if err != nil {
+			if gocql.IsNotFoundError(err) {
+				// Row doesn't exist - conflict if we expected it to exist (Version > 0)
+				if update.Version > 0 {
+					*update.Conflicting = true
+				}
+			}
+			// Ignore other errors, just don't mark as conflicting
+			continue
+		}
+
+		// Row exists - check if version matches what we expected
+		if version != update.Version {
+			*update.Conflicting = true
+		}
+	}
+
+	return &p.ConditionFailedError{Msg: "Failed to update task queues: version conflict"}
 }
 
 func (d *MatchingTaskStore) ListTaskQueueUserDataEntries(ctx context.Context, request *p.ListTaskQueueUserDataEntriesRequest) (*p.InternalListTaskQueueUserDataEntriesResponse, error) {
