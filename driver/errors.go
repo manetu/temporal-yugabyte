@@ -114,8 +114,7 @@ func exportCurrentWorkflowConflictError(
 	encoding, _ := conflictRecord["execution_state_encoding"].(string)
 	executionState := &persistencespb.WorkflowExecutionState{}
 	if state, err := serialization.WorkflowExecutionStateFromBlob(
-		binary,
-		encoding,
+		p.NewDataBlob(binary, encoding),
 	); err == nil {
 		executionState = state
 	}

@@ -252,6 +252,32 @@ func TestYugabyteTaskQueueTaskSuite(t *testing.T) {
 	suite.Run(t, s)
 }
 
+func TestYugabyteFairTaskQueueSuite(t *testing.T) {
+	testData, tearDown := setUpYugabyteTest(t)
+	defer tearDown()
+
+	taskQueueStore, err := testData.Factory.NewFairTaskStore()
+	if err != nil {
+		t.Fatalf("unable to create Yugabyte DB: %v", err)
+	}
+
+	s := commontests.NewTaskQueueSuite(t, taskQueueStore, testData.Logger) // same suite, different store
+	suite.Run(t, s)
+}
+
+func TestYugabyteTaskQueueFairTaskSuite(t *testing.T) {
+	testData, tearDown := setUpYugabyteTest(t)
+	defer tearDown()
+
+	taskQueueStore, err := testData.Factory.NewFairTaskStore()
+	if err != nil {
+		t.Fatalf("unable to create Yugabyte DB: %v", err)
+	}
+
+	s := commontests.NewTaskQueueFairTaskSuite(t, taskQueueStore, testData.Logger)
+	suite.Run(t, s)
+}
+
 //func TestYugabyteTaskQueueUserDataSuite(t *testing.T) {
 //	testData, tearDown := setUpYugabyteTest(t)
 //	defer tearDown()

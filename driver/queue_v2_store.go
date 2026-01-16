@@ -515,9 +515,14 @@ func (s *queueV2Store) ListQueues(
 			return nil, err
 		}
 		messageCount := nextMessageID - partition.MinMessageId
+		lastMessageID := int64(-1)
+		if nextMessageID > persistence.FirstQueueMessageID {
+			lastMessageID = nextMessageID - 1
+		}
 		queues = append(queues, persistence.QueueInfo{
-			QueueName:    queueName,
-			MessageCount: messageCount,
+			QueueName:     queueName,
+			MessageCount:  messageCount,
+			LastMessageID: lastMessageID,
 		})
 	}
 	if err := iter.Close(); err != nil {

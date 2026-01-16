@@ -42,7 +42,7 @@ import (
 const constMetadataPartition = 0
 const constMembershipPartition = 0
 
-const yugabytePersistenceName = "yugabyte"
+const yugabytePersistenceName = "cassandra-yugabyte"
 
 const (
 	// ****** CLUSTER_METADATA_INFO TABLE ******

@@ -1,0 +1,8 @@
+{
+    "CurrVersion": "1.1",
+    "MinCompatibleVersion": "1.0",
+    "Description": "Add CHASM node support and fair task scheduling",
+    "SchemaUpdateCqlFiles": [
+        "schema.cql"
+    ]
+}

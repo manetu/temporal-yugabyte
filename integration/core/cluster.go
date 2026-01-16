@@ -28,6 +28,8 @@ package core
 import (
 	"bytes"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,12 +48,33 @@ import (
 	p "go.temporal.io/server/common/persistence"
 	"go.temporal.io/server/common/primitives"
 	"go.temporal.io/server/common/resolver"
-	"go.temporal.io/server/environment"
 )
 
 const (
-	testSchemaDir = "../../schema/yugabyte/temporal"
+	testSchemaDir            = "../../schema/yugabyte/temporal"
+	defaultCassandraPort     = 9042
+	defaultCassandraAddress  = "127.0.0.1"
+	cassandraPortEnvVar      = "CASSANDRA_PORT"
+	cassandraAddressEnvVar   = "CASSANDRA_SEEDS"
 )
+
+// getCassandraPort returns the Cassandra port from environment or default
+func getCassandraPort() int {
+	if portStr := os.Getenv(cassandraPortEnvVar); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			return port
+		}
+	}
+	return defaultCassandraPort
+}
+
+// getCassandraAddress returns the Cassandra address from environment or default
+func getCassandraAddress() string {
+	if addr := os.Getenv(cassandraAddressEnvVar); addr != "" {
+		return addr
+	}
+	return defaultCassandraAddress
+}
 
 // TestCluster allows executing yugabyte operations in testing.
 type TestCluster struct {
@@ -68,10 +91,10 @@ func NewTestCluster(keyspace, username, password, host string, port int, schemaD
 	result.logger = logger
 	result.keyspace = keyspace
 	if port == 0 {
-		port = environment.GetCassandraPort()
+		port = getCassandraPort()
 	}
 	if host == "" {
-		host = environment.GetCassandraAddress()
+		host = getCassandraAddress()
 	}
 	options := map[string]any{}
 	options["user"] = username

@@ -78,7 +78,7 @@ const (
 
 	templateGetWorkflowExecutionQuery = `SELECT execution, execution_encoding, execution_state, execution_state_encoding, next_event_id, activity_map, activity_map_encoding, timer_map, timer_map_encoding, ` +
 		`child_executions_map, child_executions_map_encoding, request_cancel_map, request_cancel_map_encoding, signal_map, signal_map_encoding, signal_requested, buffered_events_list, ` +
-		`checksum, checksum_encoding, db_record_version ` +
+		`checksum, checksum_encoding, db_record_version, chasm_node_map, chasm_node_map_encoding ` +
 		`FROM executions ` +
 		`WHERE shard_id = ? ` +
 		`and namespace_id = ? ` +
@@ -286,6 +286,28 @@ const (
 
 	templateDeleteWorkflowExecutionSignalRequestedQuery = `UPDATE executions ` +
 		`SET signal_requested = signal_requested - ? ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and run_id = ? `
+
+	// CHASM node queries
+	templateUpdateChasmNodeQuery = `UPDATE executions ` +
+		`SET chasm_node_map[ ? ] = ?, chasm_node_map_encoding = ? ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and run_id = ? `
+
+	templateDeleteChasmNodeQuery = `DELETE chasm_node_map[ ? ] ` +
+		`FROM executions ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and run_id = ? `
+
+	templateResetChasmNodesQuery = `UPDATE executions ` +
+		`SET chasm_node_map = ?, chasm_node_map_encoding = ? ` +
 		`WHERE shard_id = ? ` +
 		`and namespace_id = ? ` +
 		`and workflow_id = ? ` +
@@ -611,6 +633,23 @@ func (d *MutableStateStore) GetWorkflowExecution(
 	}
 	state.BufferedEvents = bufferedEventsBlobs
 
+	// Read CHASM nodes
+	chasmNodeBlobs := make(map[string]p.InternalChasmNode)
+	chasmNodeEncoding, ok := result["chasm_node_map_encoding"].(string)
+	if !ok {
+		return nil, serviceerror.NewInternal("GetWorkflowExecution failed: unknown chasm_node_map_encoding type")
+	}
+	chasmNodeBytes, ok := result["chasm_node_map"].(map[string][]byte)
+	if !ok {
+		return nil, serviceerror.NewInternal("GetWorkflowExecution failed: unknown chasm_node_map type")
+	}
+	for key, value := range chasmNodeBytes {
+		chasmNodeBlobs[key] = p.InternalChasmNode{
+			CassandraBlob: p.NewDataBlob(value, chasmNodeEncoding),
+		}
+	}
+	state.ChasmNodes = chasmNodeBlobs
+
 	state.Checksum = p.NewDataBlob(result["checksum"].([]byte), result["checksum_encoding"].(string))
 
 	dbVersion := int64(0)
@@ -712,6 +751,10 @@ func (d *MutableStateStore) UpdateWorkflowExecution(
 				workflowID,
 				runID)
 		}
+
+	case p.UpdateWorkflowModeIgnoreCurrent:
+		// This mode skips current_executions validation/update entirely.
+		// Used when the caller doesn't care about the current execution state.
 
 	default:
 		return serviceerror.NewInternal(fmt.Sprintf("UpdateWorkflowExecution: unknown mode: %v", request.Mode))
@@ -978,7 +1021,7 @@ func (d *MutableStateStore) GetCurrentExecution(
 	}
 
 	// TODO: fix blob ExecutionState in storage should not be a blob.
-	executionState, err := serialization.WorkflowExecutionStateFromBlob(executionStateBlob.Data, executionStateBlob.EncodingType.String())
+	executionState, err := serialization.WorkflowExecutionStateFromBlob(executionStateBlob)
 	if err != nil {
 		return nil, err
 	}

@@ -97,6 +97,12 @@ func (f *InstanceFactory) NewTaskStore() (p.TaskStore, error) {
 	return NewMatchingTaskStore(f.session, f.logger), nil
 }
 
+// NewFairTaskStore returns a task store for fair task scheduling.
+// Uses the tasks_v2 table with pass-based ordering for stride scheduling.
+func (f *InstanceFactory) NewFairTaskStore() (p.TaskStore, error) {
+	return NewMatchingTaskStoreV2(f.session, f.logger), nil
+}
+
 // NewShardStore returns a new shard store
 func (f *InstanceFactory) NewShardStore() (p.ShardStore, error) {
 	return NewShardStore(f.clusterName, f.session, f.logger), nil
