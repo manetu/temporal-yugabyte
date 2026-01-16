@@ -278,18 +278,18 @@ func TestYugabyteTaskQueueFairTaskSuite(t *testing.T) {
 	suite.Run(t, s)
 }
 
-//func TestYugabyteTaskQueueUserDataSuite(t *testing.T) {
-//	testData, tearDown := setUpYugabyteTest(t)
-//	defer tearDown()
-//
-//	taskQueueStore, err := testData.Factory.NewTaskStore()
-//	if err != nil {
-//		t.Fatalf("unable to create Yugabyte DB: %v", err)
-//	}
-//
-//	s := commontests.NewTaskQueueUserDataSuite(t, taskQueueStore, testData.Logger)
-//	suite.Run(t, s)
-//}
+func TestYugabyteTaskQueueUserDataSuite(t *testing.T) {
+	testData, tearDown := setUpYugabyteTest(t)
+	defer tearDown()
+
+	taskQueueStore, err := testData.Factory.NewTaskStore()
+	if err != nil {
+		t.Fatalf("unable to create Yugabyte DB: %v", err)
+	}
+
+	s := commontests.NewTaskQueueUserDataSuite(t, taskQueueStore, testData.Logger)
+	suite.Run(t, s)
+}
 
 func TestYugabyteHistoryV2Persistence(t *testing.T) {
 	s := new(persistencetests.HistoryV2PersistenceSuite)
@@ -305,12 +305,12 @@ func TestYugabyteMetadataPersistenceV2(t *testing.T) {
 	suite.Run(t, s)
 }
 
-//func TestYugabyteClusterMetadataPersistence(t *testing.T) {
-//	s := new(persistencetests.ClusterMetadataManagerSuite)
-//	s.TestBase = NewTestBaseWithYugabyte(&persistencetests.TestBaseOptions{})
-//	s.TestBase.Setup(nil)
-//	suite.Run(t, s)
-//}
+func TestYugabyteClusterMetadataPersistence(t *testing.T) {
+	s := new(persistencetests.ClusterMetadataManagerSuite)
+	s.TestBase = NewTestBaseWithYugabyte(&persistencetests.TestBaseOptions{})
+	s.TestBase.Setup(nil)
+	suite.Run(t, s)
+}
 
 func TestYugabyteQueuePersistence(t *testing.T) {
 	s := new(persistencetests.QueuePersistenceSuite)
@@ -332,12 +332,15 @@ func TestYugabyteQueueV2Persistence(t *testing.T) {
 	cluster.SetupTestDatabase()
 	t.Cleanup(cluster.TearDownTestDatabase)
 
-	//t.Run("Generic", func(t *testing.T) {
-	//	t.Parallel()
-	//	commontests.RunQueueV2TestSuite(t, newQueueV2Store(cluster.GetSession()))
-	//})
+	// Note: Generic and YugabyteSpecific tests cannot run in parallel because
+	// they share the same database and ListQueues uses client-side pagination
+	// (due to YugabyteDB limitations with ALLOW FILTERING). Running in parallel
+	// causes test interference where queues from one test appear in another's
+	// ListQueues results.
+	t.Run("Generic", func(t *testing.T) {
+		commontests.RunQueueV2TestSuite(t, newQueueV2Store(cluster.GetSession()))
+	})
 	t.Run("YugabyteSpecific", func(t *testing.T) {
-		t.Parallel()
 		testYugabyteQueueV2(t, cluster)
 	})
 }

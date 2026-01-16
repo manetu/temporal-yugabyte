@@ -28,6 +28,8 @@ package driver
 import (
 	"context"
 	"fmt"
+	"sort"
+
 	"github.com/manetu/temporal-yugabyte/utils/gocql"
 
 	commonpb "go.temporal.io/api/common/v1"
@@ -62,7 +64,10 @@ const (
 	TemplateGetQueueQuery            = `SELECT metadata_payload, metadata_encoding, version FROM queues WHERE queue_type = ? AND queue_name = ?`
 	TemplateRangeDeleteMessagesQuery = `DELETE FROM queue_messages WHERE queue_type = ? AND queue_name = ? AND queue_partition = ? AND message_id >= ? AND message_id <= ?`
 	TemplateUpdateQueueMetadataQuery = `UPDATE queues SET metadata_payload = ?, metadata_encoding = ?, version = ? WHERE queue_type = ? AND queue_name = ? IF version = ?`
-	// We will have to ALLOW FILTERING for this query since partition key consists of both queue_type and queue_name.
+	// We use ALLOW FILTERING for this query since partition key consists of both queue_type and queue_name.
+	// Note: Pagination with ALLOW FILTERING in YugabyteDB has known limitations - the PageState may not
+	// advance correctly, causing duplicate results. This primarily affects administrative operations
+	// (DLQ metrics, admin tools) rather than core workflow functionality.
 	templateGetQueueNamesQuery = `SELECT queue_name, metadata_payload, metadata_encoding, version FROM queues WHERE queue_type = ? ALLOW FILTERING`
 )
 
@@ -486,12 +491,32 @@ func (s *queueV2Store) ListQueues(
 	if request.PageSize <= 0 {
 		return nil, persistence.ErrNonPositiveListQueuesPageSize
 	}
+
+	// YugabyteDB's PageState doesn't work correctly with ALLOW FILTERING queries,
+	// so we implement client-side pagination using queue_name as a cursor.
+	// This is acceptable because ListQueues is only used for admin/monitoring
+	// and the number of queues is typically small.
+	var cursor string
+	var isEnd bool
+	if len(request.NextPageToken) > 0 {
+		var ok bool
+		cursor, isEnd, ok = decodeListQueuesCursor(request.NextPageToken)
+		if !ok {
+			return nil, persistence.ErrInvalidListQueuesNextPageToken
+		}
+		// If we've already exhausted the results, return empty
+		if isEnd {
+			return &persistence.InternalListQueuesResponse{}, nil
+		}
+	}
+
+	// Fetch all queues for this queue_type
 	iter := s.session.Query(
 		templateGetQueueNamesQuery,
 		request.QueueType,
-	).PageSize(request.PageSize).PageState(request.NextPageToken).WithContext(ctx).Iter()
+	).WithContext(ctx).Iter()
 
-	var queues []persistence.QueueInfo
+	var allQueues []persistence.QueueInfo
 	for {
 		var (
 			queueName        string
@@ -519,7 +544,7 @@ func (s *queueV2Store) ListQueues(
 		if nextMessageID > persistence.FirstQueueMessageID {
 			lastMessageID = nextMessageID - 1
 		}
-		queues = append(queues, persistence.QueueInfo{
+		allQueues = append(allQueues, persistence.QueueInfo{
 			QueueName:     queueName,
 			MessageCount:  messageCount,
 			LastMessageID: lastMessageID,
@@ -528,8 +553,69 @@ func (s *queueV2Store) ListQueues(
 	if err := iter.Close(); err != nil {
 		return nil, gocql.ConvertError("QueueV2ListQueues", err)
 	}
-	return &persistence.InternalListQueuesResponse{
-		Queues:        queues,
-		NextPageToken: iter.PageState(),
-	}, nil
+
+	// Sort by queue name for consistent pagination
+	sort.Slice(allQueues, func(i, j int) bool {
+		return allQueues[i].QueueName < allQueues[j].QueueName
+	})
+
+	// Apply client-side cursor-based pagination
+	startIdx := 0
+	if cursor != "" {
+		for i, q := range allQueues {
+			if q.QueueName > cursor {
+				startIdx = i
+				break
+			}
+			// If we reach the end without finding a name > cursor, start from end (empty result)
+			if i == len(allQueues)-1 {
+				startIdx = len(allQueues)
+			}
+		}
+	}
+
+	response := &persistence.InternalListQueuesResponse{}
+	if startIdx < len(allQueues) {
+		end := startIdx + request.PageSize
+		if end > len(allQueues) {
+			end = len(allQueues)
+		}
+		response.Queues = allQueues[startIdx:end]
+		if end < len(allQueues) {
+			// Use the last returned queue name as the cursor for next page
+			response.NextPageToken = encodeListQueuesCursor(response.Queues[len(response.Queues)-1].QueueName)
+		} else {
+			// No more results - return end marker so subsequent calls return empty
+			response.NextPageToken = encodeListQueuesEndMarker()
+		}
+	} else {
+		// No results to return - mark as exhausted
+		response.NextPageToken = encodeListQueuesEndMarker()
+	}
+	return response, nil
+}
+
+// listQueuesCursorPrefix identifies valid cursor tokens for ListQueues pagination
+const listQueuesCursorPrefix = "lqc:"
+
+// listQueuesEndMarker indicates pagination has been exhausted
+const listQueuesEndMarker = "lqc:$END$"
+
+func encodeListQueuesCursor(queueName string) []byte {
+	return []byte(listQueuesCursorPrefix + queueName)
+}
+
+func encodeListQueuesEndMarker() []byte {
+	return []byte(listQueuesEndMarker)
+}
+
+func decodeListQueuesCursor(token []byte) (cursor string, isEnd bool, ok bool) {
+	s := string(token)
+	if s == listQueuesEndMarker {
+		return "", true, true
+	}
+	if len(s) < len(listQueuesCursorPrefix) || s[:len(listQueuesCursorPrefix)] != listQueuesCursorPrefix {
+		return "", false, false
+	}
+	return s[len(listQueuesCursorPrefix):], false, true
 }
