@@ -46,14 +46,14 @@ const (
 
 const (
 	// table templates
-	templateCreateTableVersion = `INSERT INTO nexus_endpoints(partition, type, id, version) VALUES (0, ?, ?, ?) IF NOT EXISTS`
+	templateCreateTableVersion = `INSERT INTO nexus_endpoints(partition, type, id, version) VALUES (0, ?, ?, ?) IF NOT EXISTS ELSE ERROR`
 	templateGetTableVersion    = `SELECT version FROM nexus_endpoints WHERE partition = 0 AND type = ? AND id = ?`
-	templateUpdateTableVersion = `UPDATE nexus_endpoints SET version = ? WHERE partition = 0 AND type = ? AND id = ? IF version = ?`
+	templateUpdateTableVersion = `UPDATE nexus_endpoints SET version = ? WHERE partition = 0 AND type = ? AND id = ? IF version = ? ELSE ERROR`
 
 	// endpoint templates
-	templateCreateEndpointQuery         = `INSERT INTO nexus_endpoints(partition, type, id, data, data_encoding, version) VALUES(0, ?, ?, ?, ?, ?) IF NOT EXISTS`
-	templateUpdateEndpointQuery         = `UPDATE nexus_endpoints SET data = ?, data_encoding = ?, version = ? WHERE partition = 0 AND type = ? AND id = ? IF version = ?`
-	templateDeleteEndpointQuery         = `DELETE FROM nexus_endpoints WHERE partition = 0 AND type = ? AND id = ? IF EXISTS`
+	templateCreateEndpointQuery         = `INSERT INTO nexus_endpoints(partition, type, id, data, data_encoding, version) VALUES(0, ?, ?, ?, ?, ?) IF NOT EXISTS ELSE ERROR`
+	templateUpdateEndpointQuery         = `UPDATE nexus_endpoints SET data = ?, data_encoding = ?, version = ? WHERE partition = 0 AND type = ? AND id = ? IF version = ? ELSE ERROR`
+	templateDeleteEndpointQuery         = `DELETE FROM nexus_endpoints WHERE partition = 0 AND type = ? AND id = ? IF EXISTS ELSE ERROR`
 	templateGetEndpointByIdQuery        = `SELECT data, data_encoding, version FROM nexus_endpoints WHERE partition = 0 AND type = ? AND id = ? LIMIT 1`
 	templateBaseListEndpointsQuery      = `SELECT id, data, data_encoding, version FROM nexus_endpoints WHERE partition = 0`
 	templateListEndpointsQuery          = templateBaseListEndpointsQuery + ` AND type = ?`
@@ -91,10 +91,10 @@ func (s *NexusEndpointStore) CreateOrUpdateNexusEndpoint(
 	ctx context.Context,
 	request *p.InternalCreateOrUpdateNexusEndpointRequest,
 ) error {
-	batch := s.session.NewBatch(gocql.LoggedBatch).WithContext(ctx)
+	txn := s.session.NewTxn().WithContext(ctx)
 
 	if request.Endpoint.Version == 0 {
-		batch.Query(templateCreateEndpointQuery,
+		txn.Query(templateCreateEndpointQuery,
 			rowTypeNexusEndpoint,
 			request.Endpoint.ID,
 			request.Endpoint.Data.Data,
@@ -102,7 +102,7 @@ func (s *NexusEndpointStore) CreateOrUpdateNexusEndpoint(
 			1,
 		)
 	} else {
-		batch.Query(templateUpdateEndpointQuery,
+		txn.Query(templateUpdateEndpointQuery,
 			request.Endpoint.Data.Data,
 			request.Endpoint.Data.EncodingType.String(),
 			request.Endpoint.Version+1,
@@ -113,62 +113,57 @@ func (s *NexusEndpointStore) CreateOrUpdateNexusEndpoint(
 	}
 
 	if request.LastKnownTableVersion == 0 {
-		batch.Query(templateCreateTableVersion,
+		txn.Query(templateCreateTableVersion,
 			rowTypePartitionStatus,
 			tableVersionEndpointID,
 			1)
 	} else {
-		batch.Query(templateUpdateTableVersion,
+		txn.Query(templateUpdateTableVersion,
 			request.LastKnownTableVersion+1,
 			rowTypePartitionStatus,
 			tableVersionEndpointID,
 			request.LastKnownTableVersion)
 	}
 
-	previousPartitionStatus := make(map[string]interface{})
-	applied, iter, err := s.session.MapExecuteBatchCAS(batch, previousPartitionStatus)
-
+	err := txn.Exec()
 	if err != nil {
+		if gocql.ConflictError(err) {
+			return s.decodeCreateOrUpdateConflict(ctx, request)
+		}
 		return gocql.ConvertError("CreateOrUpdateNexusEndpoint", err)
-	}
-
-	previousEndpoint := make(map[string]interface{})
-	iter.MapScan(previousEndpoint)
-
-	err = iter.Close()
-	if err != nil {
-		return gocql.ConvertError("CreateOrUpdateNexusEndpoint", err)
-	}
-
-	if !applied {
-		currentTableVersion, err := getTypedFieldFromRow[int64]("version", previousPartitionStatus)
-		if err != nil {
-			return fmt.Errorf("error retrieving current table version: %w", err)
-		}
-		if currentTableVersion != request.LastKnownTableVersion {
-			return fmt.Errorf("%w. provided table version: %v current table version: %v",
-				p.ErrNexusTableVersionConflict,
-				request.LastKnownTableVersion,
-				currentTableVersion)
-		}
-
-		currentVersion, err := getTypedFieldFromRow[int64]("version", previousEndpoint)
-		if err != nil {
-			return fmt.Errorf("error retrieving current endpoint version: %w", err)
-		}
-		if currentVersion != request.Endpoint.Version {
-			return fmt.Errorf("%w. provided endpoint version: %v current endpoint version: %v",
-				p.ErrNexusEndpointVersionConflict,
-				request.Endpoint.Version,
-				currentVersion)
-		}
-
-		// This should never happen. This means the request had the correct versions and gocql did not
-		// return an error but for some reason the update was not applied.
-		return serviceerror.NewInternal("CreateOrUpdateNexusEndpoint failed.")
 	}
 
 	return nil
+}
+
+func (s *NexusEndpointStore) decodeCreateOrUpdateConflict(
+	ctx context.Context,
+	request *p.InternalCreateOrUpdateNexusEndpointRequest,
+) error {
+	// Query current table version
+	currentTableVersion, err := s.getTableVersion(ctx)
+	if err != nil && !gocql.IsNotFoundError(err) {
+		return gocql.ConvertError("CreateOrUpdateNexusEndpoint", err)
+	}
+	if currentTableVersion != request.LastKnownTableVersion {
+		return fmt.Errorf("%w. provided table version: %v current table version: %v",
+			p.ErrNexusTableVersionConflict,
+			request.LastKnownTableVersion,
+			currentTableVersion)
+	}
+
+	// Query current endpoint version
+	endpoint, err := s.GetNexusEndpoint(ctx, &p.GetNexusEndpointRequest{ID: request.Endpoint.ID})
+	if err == nil && endpoint.Version != request.Endpoint.Version {
+		return fmt.Errorf("%w. provided endpoint version: %v current endpoint version: %v",
+			p.ErrNexusEndpointVersionConflict,
+			request.Endpoint.Version,
+			endpoint.Version)
+	}
+
+	// This should never happen. This means the request had the correct versions and gocql did not
+	// return an error but for some reason the update was not applied.
+	return serviceerror.NewInternal("CreateOrUpdateNexusEndpoint failed.")
 }
 
 func (s *NexusEndpointStore) GetNexusEndpoint(
@@ -248,46 +243,46 @@ func (s *NexusEndpointStore) DeleteNexusEndpoint(
 	ctx context.Context,
 	request *p.DeleteNexusEndpointRequest,
 ) error {
-	batch := s.session.NewBatch(gocql.LoggedBatch).WithContext(ctx)
+	txn := s.session.NewTxn().WithContext(ctx)
 
-	batch.Query(templateDeleteEndpointQuery,
+	txn.Query(templateDeleteEndpointQuery,
 		rowTypeNexusEndpoint,
 		request.ID)
 
-	batch.Query(templateUpdateTableVersion,
+	txn.Query(templateUpdateTableVersion,
 		request.LastKnownTableVersion+1,
 		rowTypePartitionStatus,
 		tableVersionEndpointID,
 		request.LastKnownTableVersion)
 
-	previousPartitionStatus := make(map[string]interface{})
-	applied, iter, err := s.session.MapExecuteBatchCAS(batch, previousPartitionStatus)
-
+	err := txn.Exec()
 	if err != nil {
-		return gocql.ConvertError("DeleteNexusEndpoint", err)
-	}
-
-	err = iter.Close()
-	if err != nil {
-		return gocql.ConvertError("DeleteNexusEndpoint", err)
-	}
-
-	if !applied {
-		currentTableVersion, err := getTypedFieldFromRow[int64]("version", previousPartitionStatus)
-		if err != nil {
-			return fmt.Errorf("error retrieving current table version: %w", err)
+		if gocql.ConflictError(err) {
+			return s.decodeDeleteConflict(ctx, request)
 		}
-		if currentTableVersion != request.LastKnownTableVersion {
-			return fmt.Errorf("%w. provided table version: %v current table version: %v",
-				p.ErrNexusTableVersionConflict,
-				request.LastKnownTableVersion,
-				currentTableVersion)
-		}
-
-		return serviceerror.NewNotFound(fmt.Sprintf("nexus endpoint not found for ID: %v", request.ID))
+		return gocql.ConvertError("DeleteNexusEndpoint", err)
 	}
 
 	return nil
+}
+
+func (s *NexusEndpointStore) decodeDeleteConflict(
+	ctx context.Context,
+	request *p.DeleteNexusEndpointRequest,
+) error {
+	// Query current table version
+	currentTableVersion, err := s.getTableVersion(ctx)
+	if err != nil && !gocql.IsNotFoundError(err) {
+		return gocql.ConvertError("DeleteNexusEndpoint", err)
+	}
+	if currentTableVersion != request.LastKnownTableVersion {
+		return fmt.Errorf("%w. provided table version: %v current table version: %v",
+			p.ErrNexusTableVersionConflict,
+			request.LastKnownTableVersion,
+			currentTableVersion)
+	}
+
+	return serviceerror.NewNotFound(fmt.Sprintf("nexus endpoint not found for ID: %v", request.ID))
 }
 
 func (s *NexusEndpointStore) listFirstPageWithVersion(
