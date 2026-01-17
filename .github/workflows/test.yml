@@ -24,13 +24,13 @@ jobs:
       run: make all
 
     - name: Bundle assets
-      run: tar -cvf assets.tar target/ integration/core/target/ integration/clojure/target/uberjar/clojure-integration-test.jar
+      run: tar -cvf target/assets.tar target/ integration/core/target/ integration/clojure/target/uberjar/clojure-integration-test.jar
 
     - name: Upload assets
       uses: actions/upload-artifact@v4
       with:
         name: compiled-assets
-        path: assets.tar
+        path: target/assets.tar
 
   test:
     runs-on: ubuntu-latest
@@ -47,10 +47,10 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: compiled-assets
-        path: assets
+        path: target
 
     - name: Unbundle assets
-      run: tar -xvf assets/assets.tar
+      run: tar -xvf target/assets.tar
 
     - name: Run third-party services
       uses: hoverkraft-tech/compose-action@v2.0.1
