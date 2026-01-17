@@ -82,4 +82,4 @@ docker.%:
 clean:
 	@printf $(COLOR) "Delete old server binaries..."
 	cd integration && $(MAKE) clean
-	@rm -rf target
+	@rm -rf target .artifacts

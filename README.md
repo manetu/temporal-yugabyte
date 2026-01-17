@@ -165,6 +165,8 @@ See [Benchmarking](./benchmarking/README.md)
 
 This repository is self-contained and can be used as is for development though the process is still slightly cumbersome. Improvements welcome.
 
+For detailed development instructions, including running CI locally with `act`, see the [Development Guide](./doc/development.md).
+
 ### Step 1
 
 In one terminal, run the backend dependencies with docker-compose
