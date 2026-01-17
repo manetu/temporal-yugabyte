@@ -342,21 +342,21 @@ func TestYugabyteQueueV2Persistence(t *testing.T) {
 	})
 }
 
-//func TestYugabyteNexusEndpointPersistence(t *testing.T) {
-//	cluster := NewTestClusterForYugabyte(&persistencetests.TestBaseOptions{}, log.NewNoopLogger())
-//	cluster.SetupTestDatabase()
-//	t.Cleanup(cluster.TearDownTestDatabase)
-//
-//	tableVersion := atomic.Int64{}
-//
-//	// NB: These core cannot be run in parallel because of concurrent updates to the table version by different core
-//	t.Run("Generic", func(t *testing.T) {
-//		commontests.RunNexusEndpointTestSuite(t, newNexusEndpointStore(cluster.GetSession()), &tableVersion)
-//	})
-//	t.Run("YugabyteSpecific", func(t *testing.T) {
-//		testYugabyteNexusEndpointStore(t, cluster, &tableVersion)
-//	})
-//}
+func TestYugabyteNexusEndpointPersistence(t *testing.T) {
+	cluster := NewTestClusterForYugabyte(&persistencetests.TestBaseOptions{}, log.NewNoopLogger())
+	cluster.SetupTestDatabase()
+	t.Cleanup(cluster.TearDownTestDatabase)
+
+	tableVersion := atomic.Int64{}
+
+	// NB: These core cannot be run in parallel because of concurrent updates to the table version by different core
+	t.Run("Generic", func(t *testing.T) {
+		commontests.RunNexusEndpointTestSuite(t, newNexusEndpointStore(cluster.GetSession()), &tableVersion)
+	})
+	t.Run("YugabyteSpecific", func(t *testing.T) {
+		testYugabyteNexusEndpointStore(t, cluster, &tableVersion)
+	})
+}
 
 func testYugabyteQueueV2DataCorruption(t *testing.T, cluster *TestCluster) {
 	t.Run("ErrInvalidQueueMessageEncodingType", func(t *testing.T) {

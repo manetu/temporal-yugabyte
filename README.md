@@ -16,9 +16,7 @@ This command will deploy a Temporal instance with Yugabyte as the primary datast
 
 ## Status
 
-Most features(*) are code-complete, stable, and used in production. All code changes are verified through an extensive unit and integration test suite via continuous integration (CI) to ensure the quality of each change.
-
-> (*) Nexus support is still a work in progress. We've turned off the tests for Nexus for now, but we're eagerly awaiting your contributions to make it a reality. Pull requests are more than welcome!
+All features are code-complete and stable. This project is used in production. All code changes are verified through an extensive unit and integration test suite via continuous integration (CI) to ensure the quality of each change.
 
 ## History
 
