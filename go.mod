@@ -1,20 +1,20 @@
 module github.com/manetu/temporal-yugabyte
 
-go 1.25.11
+go 1.26.0
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/pborman/uuid v1.2.1
 	github.com/stretchr/testify v1.11.1
 	github.com/temporalio/cli v1.5.1
-	github.com/urfave/cli/v2 v2.27.6
+	github.com/urfave/cli/v2 v2.27.7
 	github.com/yugabyte/gocql v1.6.0-yb-1
 	go.temporal.io/api v1.53.0
 	go.temporal.io/server v1.29.7
 	go.uber.org/automaxprocs v1.6.0
-	go.uber.org/mock v0.5.0
-	go.uber.org/zap v1.27.0
-	google.golang.org/protobuf v1.36.10
+	go.uber.org/mock v0.6.0
+	go.uber.org/zap v1.28.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -28,7 +28,7 @@ require (
 	cloud.google.com/go/storage v1.51.0 // indirect
 	dario.cat/mergo v1.0.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 // indirect
@@ -47,7 +47,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
 	github.com/coreos/go-oidc/v3 v3.13.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
