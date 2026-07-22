@@ -12,7 +12,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: manetu/unified-builder:v3.0
+    container: manetu/unified-builder:v3.2
     permissions:
       contents: read
 
@@ -59,4 +59,4 @@ jobs:
         up-flags: "--quiet-pull --wait"
 
     - name: Run integration tests
-      run: docker run -i --network integration-test -v ${{ github.workspace }}:/work -w /work manetu/unified-builder:v3.0-jre ./integration/run.sh
+      run: docker run -i --network integration-test -v ${{ github.workspace }}:/work -w /work manetu/unified-builder:v3.2-jre ./integration/run.sh

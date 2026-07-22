@@ -4,7 +4,7 @@
 #-------------------------------------------------------------------------------
 # Make - compiles the primary artifact
 #-------------------------------------------------------------------------------
-FROM manetu/unified-builder:v3.0 as builder
+FROM manetu/unified-builder:v3.2 as builder
 
 COPY Makefile go.* *.go /src/
 COPY cmd /src/cmd
@@ -22,7 +22,7 @@ RUN go install github.com/jwilder/dockerize@latest
 #-------------------------------------------------------------------------------
 # Admin Tools
 #-------------------------------------------------------------------------------
-FROM manetu/unified-builder:v3.0-runtime as admin-tools
+FROM manetu/unified-builder:v3.2-runtime as admin-tools
 
 ENV TEMPORAL_SCHEMA_PATH=/etc/temporal/schema
 COPY schema $TEMPORAL_SCHEMA_PATH
@@ -33,7 +33,7 @@ COPY --from=builder /src/target/temporal /usr/local/bin/
 #-------------------------------------------------------------------------------
 # Server
 #-------------------------------------------------------------------------------
-FROM manetu/unified-builder:v3.0-runtime as server
+FROM manetu/unified-builder:v3.2-runtime as server
 
 WORKDIR /etc/temporal
 
