@@ -182,7 +182,6 @@ func TestYugabyteExecutionMutableStateStoreSuite(t *testing.T) {
 		shardStore,
 		executionStore,
 		serialization.NewSerializer(),
-		&persistence.HistoryBranchUtilImpl{},
 		testData.Logger,
 	)
 	suite.Run(t, s)
@@ -298,11 +297,27 @@ func TestYugabyteHistoryV2Persistence(t *testing.T) {
 	suite.Run(t, s)
 }
 
+// yugabyteMetadataPersistenceSuiteV2 overrides TestRenameNamespaceCassandra, which pins a
+// Cassandra-specific IF NOT EXISTS quirk (renaming a namespace to its current name fails
+// because Cassandra's RenameNamespace batches conditional statements against a single
+// pre-batch snapshot). This driver's RenameNamespace is a real distributed transaction, so a
+// rename-to-same-name legitimately succeeds -- the same way TestRenameNamespaceSQL already
+// self-skips for any non-SQL cluster, this test's own type-switch only skips for SQL, so it
+// must be overridden here rather than relying on the upstream suite to skip it for us.
+type yugabyteMetadataPersistenceSuiteV2 struct {
+	*persistencetests.MetadataPersistenceSuiteV2
+}
+
+func (s *yugabyteMetadataPersistenceSuiteV2) TestRenameNamespaceCassandra() {
+	s.T().Skip("Cassandra-specific IF NOT EXISTS quirk does not apply: this driver's " +
+		"RenameNamespace is a single atomic transaction and succeeds when renaming to the same name")
+}
+
 func TestYugabyteMetadataPersistenceV2(t *testing.T) {
 	s := new(persistencetests.MetadataPersistenceSuiteV2)
 	s.TestBase = NewTestBaseWithYugabyte(&persistencetests.TestBaseOptions{})
 	s.TestBase.Setup(nil)
-	suite.Run(t, s)
+	suite.Run(t, &yugabyteMetadataPersistenceSuiteV2{s})
 }
 
 func TestYugabyteClusterMetadataPersistence(t *testing.T) {

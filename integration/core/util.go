@@ -39,6 +39,7 @@ import (
 	"go.temporal.io/server/common/metrics"
 	p "go.temporal.io/server/common/persistence"
 	persistencetests "go.temporal.io/server/common/persistence/persistence-tests"
+	"go.temporal.io/server/common/persistence/serialization"
 	"go.temporal.io/server/common/resolver"
 	"go.temporal.io/server/common/shuffle"
 	"go.uber.org/zap/zaptest"
@@ -82,6 +83,7 @@ func setUpYugabyteTest(t *testing.T) (YugabyteTestData, func()) {
 		testYugabyteClusterName,
 		logger,
 		metrics.NoopMetricsHandler,
+		serialization.NewSerializer(),
 	)
 
 	testData := YugabyteTestData{

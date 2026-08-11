@@ -35,6 +35,7 @@ import (
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	enumsspb "go.temporal.io/server/api/enums/v1"
+	"go.temporal.io/server/chasm"
 	p "go.temporal.io/server/common/persistence"
 
 	"go.temporal.io/server/common/persistence/serialization"
@@ -103,6 +104,52 @@ const (
 		`WHERE shard_id = ? ` +
 		`and namespace_id = ? ` +
 		`and workflow_id = ? `
+
+	// current_chasm_executions templates: holds the current-execution record for CHASM
+	// archetypes other than Workflow, in a separate ID space from current_executions, so a
+	// workflow and a CHASM entity may share a business ID without colliding on the same current
+	// record (see schema/yugabyte/temporal/versioned/v1.2).
+	templateUpdateCurrentChasmExecutionQueryPrefix = `UPDATE current_chasm_executions USING TTL 0 ` +
+		`SET current_run_id = ?, execution_state = ?, execution_state_encoding = ?, workflow_last_write_version = ?, workflow_state = ? ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and archetype_id = ? `
+
+	templateUpdateCurrentChasmExecutionQuery = templateUpdateCurrentChasmExecutionQueryPrefix +
+		`IF current_run_id = ? ELSE ERROR `
+
+	templateUpdateCurrentChasmExecutionForNewQuery = templateUpdateCurrentChasmExecutionQueryPrefix +
+		`IF workflow_last_write_version = ? ` +
+		`and workflow_state = ? ` +
+		`and current_run_id = ? ELSE ERROR `
+
+	templateCreateCurrentChasmExecutionQuery = `INSERT INTO current_chasm_executions (` +
+		`shard_id, namespace_id, workflow_id, archetype_id, ` +
+		`current_run_id, execution_state, execution_state_encoding, ` +
+		`workflow_last_write_version, workflow_state) ` +
+		`VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS ELSE ERROR USING TTL 0 `
+
+	templateGetCurrentChasmExecutionQuery = `SELECT current_run_id, execution_state, execution_state_encoding, workflow_last_write_version ` +
+		`FROM current_chasm_executions ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and archetype_id = ? `
+
+	templateGetCurrentChasmExecutionConflictQuery = `SELECT current_run_id, execution_state, execution_state_encoding, workflow_state, workflow_last_write_version ` +
+		`FROM current_chasm_executions ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and archetype_id = ? `
+
+	templateDeleteCurrentChasmExecutionQuery = `DELETE FROM current_chasm_executions ` +
+		`WHERE shard_id = ? ` +
+		`and namespace_id = ? ` +
+		`and workflow_id = ? ` +
+		`and archetype_id = ? ` +
+		`IF current_run_id = ? `
 
 	templateListWorkflowExecutionQuery = `SELECT run_id, execution, execution_encoding, execution_state, execution_state_encoding, next_event_id ` +
 		`FROM executions ` +
@@ -316,14 +363,77 @@ const (
 
 type (
 	MutableStateStore struct {
-		Session gocql.Session
+		Session    gocql.Session
+		serializer serialization.Serializer
 	}
 )
 
-func NewMutableStateStore(session gocql.Session) *MutableStateStore {
+func NewMutableStateStore(session gocql.Session, serializer serialization.Serializer) *MutableStateStore {
 	return &MutableStateStore{
-		Session: session,
+		Session:    session,
+		serializer: serializer,
 	}
+}
+
+// currentExecutionUpdateForNewQuery selects the current-execution UPDATE-for-new query
+// template for the given archetype: workflows use current_executions, all other CHASM
+// archetypes use the separate current_chasm_executions ID space.
+func currentExecutionUpdateForNewQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateUpdateCurrentWorkflowExecutionForNewQuery
+	}
+	return templateUpdateCurrentChasmExecutionForNewQuery
+}
+
+// currentExecutionUpdateQuery selects the current-execution UPDATE query template.
+func currentExecutionUpdateQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateUpdateCurrentWorkflowExecutionQuery
+	}
+	return templateUpdateCurrentChasmExecutionQuery
+}
+
+// currentExecutionCreateQuery selects the current-execution INSERT query template.
+func currentExecutionCreateQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateCreateCurrentWorkflowExecutionQuery
+	}
+	return templateCreateCurrentChasmExecutionQuery
+}
+
+// currentExecutionGetQuery selects the current-execution SELECT query template.
+func currentExecutionGetQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateGetCurrentExecutionQuery
+	}
+	return templateGetCurrentChasmExecutionQuery
+}
+
+// currentExecutionGetConflictQuery selects the current-execution conflict-diagnosis SELECT
+// query template.
+func currentExecutionGetConflictQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateGetCurrentExecutionConflictQuery
+	}
+	return templateGetCurrentChasmExecutionConflictQuery
+}
+
+// currentExecutionDeleteQuery selects the current-execution DELETE query template.
+func currentExecutionDeleteQuery(archetypeID chasm.ArchetypeID) string {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return templateDeleteCurrentWorkflowExecutionQuery
+	}
+	return templateDeleteCurrentChasmExecutionQuery
+}
+
+// currentExecutionKeyArgs returns the WHERE-clause key arguments identifying a current-execution
+// record: (shard_id, namespace_id, workflow_id) for a workflow, or
+// (shard_id, namespace_id, workflow_id, archetype_id) for any other CHASM archetype.
+func currentExecutionKeyArgs(shardID int32, namespaceID string, workflowID string, archetypeID chasm.ArchetypeID) []interface{} {
+	if archetypeID == chasm.WorkflowArchetypeID {
+		return []interface{}{shardID, namespaceID, workflowID}
+	}
+	return []interface{}{shardID, namespaceID, workflowID, archetypeID}
 }
 
 func (d *MutableStateStore) validateCurrentWorkflowNotExist(
@@ -331,14 +441,14 @@ func (d *MutableStateStore) validateCurrentWorkflowNotExist(
 	validator *PostQueryValidation,
 	shardID int32,
 	namespaceID string,
-	workflowID string) {
+	workflowID string,
+	archetypeID chasm.ArchetypeID) {
 
 	validator.Add(func() error {
 		conflictRecord := newConflictRecord()
-		err := d.Session.Query(templateGetCurrentExecutionConflictQuery,
-			shardID,
-			namespaceID,
-			workflowID).WithContext(ctx).MapScan(conflictRecord)
+		err := d.Session.Query(currentExecutionGetConflictQuery(archetypeID),
+			currentExecutionKeyArgs(shardID, namespaceID, workflowID, archetypeID)...,
+		).WithContext(ctx).MapScan(conflictRecord)
 		if gocql.IsNotFoundError(err) {
 			return nil
 		} else if err == nil {
@@ -354,14 +464,14 @@ func (d *MutableStateStore) validateCurrentWorkflowRunId(
 	shardID int32,
 	namespaceID string,
 	workflowID string,
+	archetypeID chasm.ArchetypeID,
 	runID string) {
 
 	validator.Add(func() error {
 		conflictRecord := newConflictRecord()
-		err := d.Session.Query(templateGetCurrentExecutionConflictQuery,
-			shardID,
-			namespaceID,
-			workflowID).WithContext(ctx).MapScan(conflictRecord)
+		err := d.Session.Query(currentExecutionGetConflictQuery(archetypeID),
+			currentExecutionKeyArgs(shardID, namespaceID, workflowID, archetypeID)...,
+		).WithContext(ctx).MapScan(conflictRecord)
 		if err == nil {
 			if runID != gocql.UUIDToString(conflictRecord["current_run_id"]) {
 				return exportCurrentWorkflowConflictError(conflictRecord)
@@ -379,16 +489,16 @@ func (d *MutableStateStore) validateCurrentWorkflowMvcc(
 	shardID int32,
 	namespaceID string,
 	workflowID string,
+	archetypeID chasm.ArchetypeID,
 	lastWriteVersion int64,
 	workflowState enumsspb.WorkflowExecutionState,
 	runID string) {
 
 	validator.Add(func() error {
 		conflictRecord := newConflictRecord()
-		err := d.Session.Query(templateGetCurrentExecutionConflictQuery,
-			shardID,
-			namespaceID,
-			workflowID).WithContext(ctx).MapScan(conflictRecord)
+		err := d.Session.Query(currentExecutionGetConflictQuery(archetypeID),
+			currentExecutionKeyArgs(shardID, namespaceID, workflowID, archetypeID)...,
+		).WithContext(ctx).MapScan(conflictRecord)
 		if err == nil {
 			actualRunID := gocql.UUIDToString(conflictRecord["current_run_id"])
 			actualLastWriteVersion := conflictRecord["workflow_last_write_version"].(int64)
@@ -478,48 +588,52 @@ func (d *MutableStateStore) CreateWorkflowExecution(
 	namespaceID := newWorkflow.NamespaceID
 	workflowID := newWorkflow.WorkflowID
 	runID := newWorkflow.RunID
+	archetypeID := request.ArchetypeID
 
 	switch request.Mode {
 	case p.CreateWorkflowModeBypassCurrent:
 		// noop
 
 	case p.CreateWorkflowModeUpdateCurrent:
-		txn.Query(templateUpdateCurrentWorkflowExecutionForNewQuery,
+		updateArgs := append([]interface{}{
 			runID,
 			newWorkflow.ExecutionStateBlob.Data,
 			newWorkflow.ExecutionStateBlob.EncodingType.String(),
 			lastWriteVersion,
 			newWorkflow.ExecutionState.State,
-			shardID,
-			namespaceID,
-			workflowID,
+		}, currentExecutionKeyArgs(shardID, namespaceID, workflowID, archetypeID)...)
+		updateArgs = append(updateArgs,
 			request.PreviousLastWriteVersion,
 			enumsspb.WORKFLOW_EXECUTION_STATE_COMPLETED,
 			request.PreviousRunID,
 		)
+		txn.Query(currentExecutionUpdateForNewQuery(archetypeID), updateArgs...)
 
 		d.validateCurrentWorkflowMvcc(ctx,
 			validator,
 			shardID,
 			namespaceID,
 			workflowID,
+			archetypeID,
 			request.PreviousLastWriteVersion,
 			enumsspb.WORKFLOW_EXECUTION_STATE_COMPLETED,
 			request.PreviousRunID)
 
 	case p.CreateWorkflowModeBrandNew:
-		txn.Query(templateCreateCurrentWorkflowExecutionQuery,
-			shardID,
-			namespaceID,
-			workflowID,
+		createArgs := []interface{}{shardID, namespaceID, workflowID}
+		if archetypeID != chasm.WorkflowArchetypeID {
+			createArgs = append(createArgs, archetypeID)
+		}
+		createArgs = append(createArgs,
 			runID,
 			newWorkflow.ExecutionStateBlob.Data,
 			newWorkflow.ExecutionStateBlob.EncodingType.String(),
 			lastWriteVersion,
 			newWorkflow.ExecutionState.State,
 		)
+		txn.Query(currentExecutionCreateQuery(archetypeID), createArgs...)
 
-		d.validateCurrentWorkflowNotExist(ctx, validator, shardID, namespaceID, workflowID)
+		d.validateCurrentWorkflowNotExist(ctx, validator, shardID, namespaceID, workflowID, archetypeID)
 
 	default:
 		return nil, serviceerror.NewInternal(fmt.Sprintf("CreateWorkflowExecution: unknown mode: %v", request.Mode))
@@ -679,6 +793,7 @@ func (d *MutableStateStore) UpdateWorkflowExecution(
 	workflowID := updateWorkflow.WorkflowID
 	runID := updateWorkflow.RunID
 	shardID := request.ShardID
+	archetypeID := request.ArchetypeID
 
 	switch request.Mode {
 	case p.UpdateWorkflowModeBypassCurrent:
@@ -687,6 +802,7 @@ func (d *MutableStateStore) UpdateWorkflowExecution(
 			request.ShardID,
 			namespaceID,
 			workflowID,
+			archetypeID,
 			runID,
 			timestamp.TimeValuePtr(updateWorkflow.ExecutionState.StartTime),
 		); err != nil {
@@ -704,51 +820,49 @@ func (d *MutableStateStore) UpdateWorkflowExecution(
 				return serviceerror.NewInternal("UpdateWorkflowExecution: cannot continue as new to another namespace")
 			}
 
-			txn.Query(templateUpdateCurrentWorkflowExecutionQuery,
+			args := append([]interface{}{
 				newRunID,
 				newWorkflow.ExecutionStateBlob.Data,
 				newWorkflow.ExecutionStateBlob.EncodingType.String(),
 				newLastWriteVersion,
 				newWorkflow.ExecutionState.State,
-				shardID,
-				newNamespaceID,
-				newWorkflowID,
-				runID,
-			)
+			}, currentExecutionKeyArgs(shardID, newNamespaceID, newWorkflowID, archetypeID)...)
+			args = append(args, runID)
+			txn.Query(currentExecutionUpdateQuery(archetypeID), args...)
 
 			d.validateCurrentWorkflowRunId(ctx,
 				validator,
 				shardID,
 				namespaceID,
 				workflowID,
+				archetypeID,
 				runID)
 
 		} else {
 			lastWriteVersion := updateWorkflow.LastWriteVersion
 
 			// TODO: double encoding execution state? already in updateWorkflow.ExecutionStateBlob
-			executionStateDatablob, err := serialization.WorkflowExecutionStateToBlob(updateWorkflow.ExecutionState)
+			executionStateDatablob, err := d.serializer.WorkflowExecutionStateToBlob(updateWorkflow.ExecutionState)
 			if err != nil {
 				return err
 			}
 
-			txn.Query(templateUpdateCurrentWorkflowExecutionQuery,
+			args := append([]interface{}{
 				runID,
 				executionStateDatablob.Data,
 				executionStateDatablob.EncodingType.String(),
 				lastWriteVersion,
 				updateWorkflow.ExecutionState.State,
-				request.ShardID,
-				namespaceID,
-				workflowID,
-				runID,
-			)
+			}, currentExecutionKeyArgs(request.ShardID, namespaceID, workflowID, archetypeID)...)
+			args = append(args, runID)
+			txn.Query(currentExecutionUpdateQuery(archetypeID), args...)
 
 			d.validateCurrentWorkflowRunId(ctx,
 				validator,
 				shardID,
 				namespaceID,
 				workflowID,
+				archetypeID,
 				runID)
 		}
 
@@ -815,6 +929,7 @@ func (d *MutableStateStore) ConflictResolveWorkflowExecution(
 	newWorkflow := request.NewWorkflowSnapshot
 
 	shardID := request.ShardID
+	archetypeID := request.ArchetypeID
 
 	namespaceID := resetWorkflow.NamespaceID
 	workflowID := resetWorkflow.WorkflowID
@@ -833,6 +948,7 @@ func (d *MutableStateStore) ConflictResolveWorkflowExecution(
 			shardID,
 			namespaceID,
 			workflowID,
+			archetypeID,
 			resetWorkflow.ExecutionState.RunId,
 			startTime,
 		); err != nil {
@@ -856,23 +972,22 @@ func (d *MutableStateStore) ConflictResolveWorkflowExecution(
 			currentRunID = resetWorkflow.ExecutionState.RunId
 		}
 
-		txn.Query(templateUpdateCurrentWorkflowExecutionQuery,
+		args := append([]interface{}{
 			executionState.RunId,
 			executionStateBlob.Data,
 			executionStateBlob.EncodingType.String(),
 			lastWriteVersion,
 			executionState.State,
-			shardID,
-			namespaceID,
-			workflowID,
-			currentRunID,
-		)
+		}, currentExecutionKeyArgs(shardID, namespaceID, workflowID, archetypeID)...)
+		args = append(args, currentRunID)
+		txn.Query(currentExecutionUpdateQuery(archetypeID), args...)
 
 		d.validateCurrentWorkflowRunId(ctx,
 			validator,
 			shardID,
 			namespaceID,
 			workflowID,
+			archetypeID,
 			currentRunID)
 
 	default:
@@ -940,6 +1055,7 @@ func (d *MutableStateStore) assertNotCurrentExecution(
 	shardID int32,
 	namespaceID string,
 	workflowID string,
+	archetypeID chasm.ArchetypeID,
 	runID string,
 	startTime *time.Time,
 ) error {
@@ -948,6 +1064,7 @@ func (d *MutableStateStore) assertNotCurrentExecution(
 		ShardID:     shardID,
 		NamespaceID: namespaceID,
 		WorkflowID:  workflowID,
+		ArchetypeID: archetypeID,
 	}); err != nil {
 		if _, isNotFound := err.(*serviceerror.NotFound); isNotFound {
 			// allow bypassing no current record
@@ -988,12 +1105,11 @@ func (d *MutableStateStore) DeleteCurrentWorkflowExecution(
 	ctx context.Context,
 	request *p.DeleteCurrentWorkflowExecutionRequest,
 ) error {
-	query := d.Session.Query(templateDeleteCurrentWorkflowExecutionQuery,
-		request.ShardID,
-		request.NamespaceID,
-		request.WorkflowID,
+	args := append(
+		currentExecutionKeyArgs(request.ShardID, request.NamespaceID, request.WorkflowID, request.ArchetypeID),
 		request.RunID,
-	).WithContext(ctx)
+	)
+	query := d.Session.Query(currentExecutionDeleteQuery(request.ArchetypeID), args...).WithContext(ctx)
 
 	err := query.Exec()
 	return gocql.ConvertError("DeleteWorkflowCurrentRow", err)
@@ -1003,10 +1119,8 @@ func (d *MutableStateStore) GetCurrentExecution(
 	ctx context.Context,
 	request *p.GetCurrentExecutionRequest,
 ) (*p.InternalGetCurrentExecutionResponse, error) {
-	query := d.Session.Query(templateGetCurrentExecutionQuery,
-		request.ShardID,
-		request.NamespaceID,
-		request.WorkflowID,
+	query := d.Session.Query(currentExecutionGetQuery(request.ArchetypeID),
+		currentExecutionKeyArgs(request.ShardID, request.NamespaceID, request.WorkflowID, request.ArchetypeID)...,
 	).WithContext(ctx)
 
 	result := make(map[string]interface{})
@@ -1021,7 +1135,7 @@ func (d *MutableStateStore) GetCurrentExecution(
 	}
 
 	// TODO: fix blob ExecutionState in storage should not be a blob.
-	executionState, err := serialization.WorkflowExecutionStateFromBlob(executionStateBlob)
+	executionState, err := d.serializer.WorkflowExecutionStateFromBlob(executionStateBlob)
 	if err != nil {
 		return nil, err
 	}

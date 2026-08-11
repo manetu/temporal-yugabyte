@@ -154,6 +154,14 @@ CREATE TABLE namespaces (
 
 CREATE INDEX namespace_by_id_idx on namespaces (id);
 
+-- Enforces namespace ID uniqueness independently from name uniqueness (see
+-- schema/yugabyte/temporal/versioned/v1.2).
+CREATE TABLE namespaces_by_id (
+  id                             uuid,
+  name                           text,
+  PRIMARY KEY (id)
+) WITH transactions = { 'enabled' : true };
+
 CREATE TABLE queue_metadata (
   queue_type                    int,
   cluster_ack_level             map<text, bigint>, -- TODO remove once migration is finished
@@ -226,4 +234,20 @@ CREATE TABLE nexus_endpoints (
   -- When type=NexusEndpoint contains the endpoint version used for optimistic concurrency.
   version                   bigint,
   PRIMARY KEY ((partition), type, id)
+) WITH transactions = { 'enabled' : true };
+
+-- Holds the current-execution record for CHASM archetypes other than Workflow, in a separate
+-- ID space from current_executions so a workflow and a CHASM entity may share a business ID
+-- without colliding on the same current record.
+CREATE TABLE current_chasm_executions (
+  shard_id                       int,
+  namespace_id                   uuid,
+  workflow_id                    text,
+  archetype_id                   int,
+  current_run_id                 uuid,
+  execution_state                blob,
+  execution_state_encoding       text,
+  workflow_last_write_version    bigint,
+  workflow_state                 int,
+  PRIMARY KEY  ((shard_id, namespace_id, workflow_id, archetype_id))
 ) WITH transactions = { 'enabled' : true };

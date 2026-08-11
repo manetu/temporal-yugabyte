@@ -1,3 +1,5 @@
+DROP TABLE namespaces_by_id;
+DROP TABLE current_chasm_executions;
 DROP TABLE nexus_endpoints;
 DROP TABLE queue_messages;
 DROP TABLE queues;

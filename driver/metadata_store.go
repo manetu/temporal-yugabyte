@@ -47,7 +47,15 @@ const (
 		`(` + templateNamespaceColumns + `) ` +
 		`VALUES(?, ?, ?, ?, ?, ?) IF NOT EXISTS ELSE ERROR`
 
+	// namespaces_by_id gives `id` a real, atomically-checked uniqueness constraint, since
+	// `namespaces`' own primary key is `name` and `namespace_by_id_idx` is only a secondary
+	// index (which does not enforce uniqueness in YCQL).
+	templateCreateNamespaceByID = `INSERT INTO namespaces_by_id (id, name) VALUES(?, ?) IF NOT EXISTS ELSE ERROR`
+	templateUpdateNamespaceByID = `UPDATE namespaces_by_id SET name = ? WHERE id = ?`
+	templateDeleteNamespaceByID = `DELETE FROM namespaces_by_id WHERE id = ?`
+
 	templateGetNamespaceNameById = `SELECT name FROM namespaces WHERE id = ?`
+	templateGetNamespaceIdByName = `SELECT id FROM namespaces WHERE name = ?`
 
 	templateListNamespaces = `SELECT ` + templateNamespaceColumns + ` FROM namespaces`
 
@@ -111,6 +119,7 @@ func (m *MetadataStore) CreateNamespace(
 		request.Namespace.EncodingType.String(),
 		metadata.NotificationVersion,
 		request.IsGlobal)
+	txn.Query(templateCreateNamespaceByID, request.ID, request.Name)
 	m.updateMetadataTxn(txn, metadata.NotificationVersion)
 
 	err = txn.Exec()
@@ -164,6 +173,7 @@ func (m *MetadataStore) RenameNamespace(
 		request.Namespace.EncodingType.String(),
 		request.NotificationVersion,
 		request.IsGlobal)
+	txn.Query(templateUpdateNamespaceByID, request.Name, request.Id)
 	m.updateMetadataTxn(txn, request.NotificationVersion)
 
 	err := txn.Exec()
@@ -315,6 +325,11 @@ func (m *MetadataStore) DeleteNamespace(
 	}
 
 	query = m.session.Query(templateDeleteNamespace, name).WithContext(ctx)
+	if err := query.Exec(); err != nil {
+		return err
+	}
+
+	query = m.session.Query(templateDeleteNamespaceByID, request.ID).WithContext(ctx)
 	return query.Exec()
 }
 
@@ -322,6 +337,10 @@ func (m *MetadataStore) DeleteNamespaceByName(
 	ctx context.Context,
 	request *p.DeleteNamespaceByNameRequest,
 ) error {
+	var id string
+	idQuery := m.session.Query(templateGetNamespaceIdByName, request.Name).WithContext(ctx)
+	idErr := idQuery.Scan(&id)
+
 	query := m.session.Query(templateDeleteNamespace, request.Name).WithContext(ctx)
 	err := query.Exec()
 	if err != nil {
@@ -330,7 +349,12 @@ func (m *MetadataStore) DeleteNamespaceByName(
 		}
 		return err
 	}
-	return err
+
+	if idErr == nil {
+		query = m.session.Query(templateDeleteNamespaceByID, id).WithContext(ctx)
+		return query.Exec()
+	}
+	return nil
 }
 
 func (m *MetadataStore) GetMetadata(

@@ -36,6 +36,7 @@ import (
 	"go.temporal.io/server/common/log/tag"
 	"go.temporal.io/server/common/metrics"
 	p "go.temporal.io/server/common/persistence"
+	"go.temporal.io/server/common/persistence/serialization"
 	"go.temporal.io/server/common/resolver"
 )
 
@@ -49,6 +50,7 @@ type (
 		clusterName string
 		logger      log.Logger
 		session     localgocql.Session
+		serializer  serialization.Serializer
 	}
 )
 
@@ -59,6 +61,7 @@ func (f *MetaFactory) NewFactory(
 	clusterName string,
 	logger log.Logger,
 	metricsHandler metrics.Handler,
+	serializer serialization.Serializer,
 ) p.DataStoreFactory {
 	ccfg, err := ybconfig.ImportConfig(cfg)
 	if err != nil {
@@ -74,7 +77,7 @@ func (f *MetaFactory) NewFactory(
 	if err != nil {
 		logger.Fatal("unable to initialize driver session", tag.Error(err))
 	}
-	return NewFactoryFromSession(ccfg, clusterName, logger, session)
+	return NewFactoryFromSession(ccfg, clusterName, logger, session, serializer)
 }
 
 // NewFactoryFromSession returns an instance of a factory object from the given session.
@@ -83,12 +86,14 @@ func NewFactoryFromSession(
 	clusterName string,
 	logger log.Logger,
 	session localgocql.Session,
+	serializer serialization.Serializer,
 ) p.DataStoreFactory {
 	return &InstanceFactory{
 		cfg:         cfg,
 		clusterName: clusterName,
 		logger:      logger,
 		session:     session,
+		serializer:  serializer,
 	}
 }
 
@@ -120,12 +125,12 @@ func (f *InstanceFactory) NewClusterMetadataStore() (p.ClusterMetadataStore, err
 
 // NewExecutionStore returns a new ExecutionStore.
 func (f *InstanceFactory) NewExecutionStore() (p.ExecutionStore, error) {
-	return NewExecutionStore(f.session), nil
+	return NewExecutionStore(f.session, f.serializer), nil
 }
 
 // NewQueue returns a new queue backed by driver
 func (f *InstanceFactory) NewQueue(queueType p.QueueType) (p.Queue, error) {
-	return NewQueueStore(queueType, f.session, f.logger)
+	return NewQueueStore(queueType, f.session, f.logger, f.serializer)
 }
 
 // NewQueueV2 returns a new data-access object for queues and messages stored in driver . It will never return an

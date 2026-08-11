@@ -31,6 +31,7 @@ import (
 	"time"
 
 	p "go.temporal.io/server/common/persistence"
+	"go.temporal.io/server/common/persistence/serialization"
 )
 
 const (
@@ -75,11 +76,11 @@ type (
 
 var _ p.ExecutionStore = (*ExecutionStore)(nil)
 
-func NewExecutionStore(session gocql.Session) *ExecutionStore {
+func NewExecutionStore(session gocql.Session, serializer serialization.Serializer) *ExecutionStore {
 	return &ExecutionStore{
-		HistoryStore:          NewHistoryStore(session),
-		MutableStateStore:     NewMutableStateStore(session),
-		MutableStateTaskStore: NewMutableStateTaskStore(session),
+		HistoryStore:          NewHistoryStore(session, serializer),
+		MutableStateStore:     NewMutableStateStore(session, serializer),
+		MutableStateTaskStore: NewMutableStateTaskStore(session, serializer),
 	}
 }
 
