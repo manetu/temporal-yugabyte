@@ -52,7 +52,7 @@ func ConvertError(
 		return serviceerror.NewNotFound(fmt.Sprintf("operation %v encountered %v", operation, err.Error()))
 	}
 
-	var cqlTimeoutErr gocql.RequestErrWriteTimeout
+	var cqlTimeoutErr *gocql.RequestErrWriteTimeout
 	if errors.As(err, &cqlTimeoutErr) {
 		return &persistence.TimeoutError{Msg: fmt.Sprintf("operation %v encountered %v", operation, cqlTimeoutErr.Error())}
 	}
@@ -79,6 +79,10 @@ func ConvertError(
 
 			return serviceerror.NewUnavailable(fmt.Sprintf("operation %v encountered %v", operation, cqlRequestErr.Error()))
 		}
+	}
+
+	if e, ok := errors.AsType[*serviceerror.ResourceExhausted](err); ok {
+		return e
 	}
 
 	return serviceerror.NewUnavailable(fmt.Sprintf("operation %v encountered %v", operation, err.Error()))

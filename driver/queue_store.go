@@ -56,9 +56,10 @@ const (
 
 type (
 	QueueStore struct {
-		queueType persistence.QueueType
-		session   gocql.Session
-		logger    log.Logger
+		queueType  persistence.QueueType
+		session    gocql.Session
+		logger     log.Logger
+		serializer serialization.Serializer
 	}
 )
 
@@ -66,11 +67,13 @@ func NewQueueStore(
 	queueType persistence.QueueType,
 	session gocql.Session,
 	logger log.Logger,
+	serializer serialization.Serializer,
 ) (persistence.Queue, error) {
 	return &QueueStore{
-		queueType: queueType,
-		session:   session,
-		logger:    logger,
+		queueType:  queueType,
+		session:    session,
+		logger:     logger,
+		serializer: serializer,
 	}, nil
 }
 
@@ -326,7 +329,7 @@ func (q *QueueStore) getQueueMetadata(
 		return nil, err
 	}
 
-	return convertQueueMetadata(message)
+	return convertQueueMetadata(message, q.serializer)
 }
 
 func (q *QueueStore) updateAckLevel(
@@ -336,7 +339,7 @@ func (q *QueueStore) updateAckLevel(
 ) error {
 
 	// TODO: remove this once cluster_ack_level is removed from DB
-	metadataStruct, err := serialization.QueueMetadataFromBlob(metadata.Blob)
+	metadataStruct, err := q.serializer.QueueMetadataFromBlob(metadata.Blob)
 	if err != nil {
 		return gocql.ConvertError("updateAckLevel", err)
 	}
@@ -411,6 +414,7 @@ func convertQueueMessage(
 
 func convertQueueMetadata(
 	message map[string]interface{},
+	serializer serialization.Serializer,
 ) (*persistence.InternalQueueMetadata, error) {
 
 	metadata := &persistence.InternalQueueMetadata{
@@ -420,7 +424,7 @@ func convertQueueMetadata(
 	if ok {
 		clusterAckLevel := message["cluster_ack_level"].(map[string]int64)
 		// TODO: remove this once we remove cluster_ack_level from DB.
-		blob, err := serialization.QueueMetadataToBlob(&persistencespb.QueueMetadata{ClusterAckLevels: clusterAckLevel})
+		blob, err := serializer.QueueMetadataToBlob(&persistencespb.QueueMetadata{ClusterAckLevels: clusterAckLevel})
 		if err != nil {
 			return nil, err
 		}

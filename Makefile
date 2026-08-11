@@ -108,9 +108,9 @@ target/temporal-cassandra-tool: $(ALL_SRC)
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
 	CGO_ENABLED=$(CGO_ENABLED) go build -o $@ ./cmd/tools/cassandra
 
-target/temporal: $(ALL_SRC)
+target/temporal: go.mod
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
-	CGO_ENABLED=$(CGO_ENABLED) go build -o $@ ./cmd/tools/cli
+	CGO_ENABLED=$(CGO_ENABLED) go build -o $@ github.com/temporalio/cli/cmd/temporal
 
 .PHONY: release
 release: $(patsubst %,docker.%,$(DOCKER_TARGETS))
