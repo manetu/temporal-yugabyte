@@ -7,16 +7,16 @@ Temporal users running self-hosted instances can now leverage the power of Yugab
 
 ## Quickstart
 
-You may start a local instance of temporal-yugabyte using docker-compose:
+You may start a local instance of temporal-yugabyte using docker compose:
 
 ```shell
-docker-compose -f docker/docker-compose/quick-start.yml up
+docker compose -f docker/docker-compose/quick-start.yml up
 ```
 This command will deploy a Temporal instance with Yugabyte as the primary datastore, and Elasticsearch as the visibility store.  You may find the Temporal UI at http://localhost:8080 and the Temporal API at localhost:7233.
 
 ## Status
 
-All features are code-complete and stable. This project is used in production. All code changes are verified through an extensive unit and integration test suite via continuous integration (CI) to ensure the quality of each change.
+All features are code-complete and stable. This project is used in production. All code changes are verified through an extensive unit and integration test suite via continuous integration (CI) to ensure the quality of each change. See the [Testing Guide](./doc/testing.md) to run that suite locally.
 
 ## History
 
@@ -161,73 +161,7 @@ See [Benchmarking](./benchmarking/README.md)
 
 ## Development
 
-This repository is self-contained and can be used as is for development though the process is still slightly cumbersome. Improvements welcome.
+This repository is self-contained and can be used as is for development, though the process is still slightly cumbersome. Improvements welcome.
 
-For detailed development instructions, including running CI locally with `act`, see the [Development Guide](./doc/development.md).
-
-### Step 1
-
-In one terminal, run the backend dependencies with docker-compose
-
-```shell
-$ docker-compose -f docker/docker-compose/develop.yml up
-```
-
-### Step 2
-
-In a second terminal, run
-
-```shell
-$ make install-schema
-```
-
-### Step 3
-
-From an IDE such as Goland, set up an execution for ./cmd/server with the following switches:
-
-```shell
---env development --allow-no-auth start
-```
-
-Then launch the environment in the debugger.
-
-### Step 4
-
-Once temporal is running, execute the following command within a free shell, such as the one used in Step 2
-
-```shell
-$ temporal operator namespace create default
-```
-
-### Step 5
-
-Use your cluster!
-
-Helpful suggestions:
-
-1. You can open the Temporal UI by visiting http://localhost:8080
-2. You can generate some workflow activity by running `lein test` from the integration directory
-
-## Profiling
-
-If you wish to try to optimize performance, you may find the following info helpful:
-
-The development environment integrates with [pprof](https://pkg.go.dev/net/http/pprof). It exposes an HTTP listener on port 7936.
-
-### Tracing
-
-Run the following to generate a 15-second trace:
-
-```shell
-curl -o trace.out http://localhost:7936/debug/pprof/trace?seconds=15
-```
-
-Once the system completes the trace, you may render it with
-
-```shell
-go tool trace trace.out
-```
-
-> Tip: Enable "Flow Events" in the process trace window
-
-![flow trace](./doc/images/trace.png)
+- [Development Guide](./doc/development.md) - local setup, running the server in a debugger, and profiling
+- [Testing Guide](./doc/testing.md) - running the unit, core persistence, and workflow integration suites, and reproducing CI locally

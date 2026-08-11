@@ -23,6 +23,9 @@ jobs:
     - name: Compile
       run: make all
 
+    - name: Run unit tests
+      run: make unit-test
+
     - name: Bundle assets
       run: tar -cvf target/assets.tar target/ integration/core/target/ integration/clojure/target/uberjar/clojure-integration-test.jar
 
