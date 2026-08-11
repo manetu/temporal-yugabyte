@@ -10,9 +10,11 @@ GOPATH      ?= $(shell go env GOPATH)
 # Disable cgo by default.
 CGO_ENABLED ?= 0
 
+DEPS = Makefile $(shell find . -name "*.go") ../../go.mod
+
 all: target/core-integration-test
 
-target/core-integration-test:
+target/core-integration-test: $(DEPS)
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
 	CGO_ENABLED=$(CGO_ENABLED) go test -c github.com/manetu/temporal-yugabyte/integration/core -o $@
 

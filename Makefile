@@ -53,6 +53,53 @@ bin: target/temporal-server target/temporal-cassandra-tool target/temporal
 integration:
 	cd integration && $(MAKE)
 
+##### Integration testing ######
+INTEGRATION_COMPOSE ?= docker/docker-compose/integrate.yml
+INTEGRATION_NETWORK ?= integration-test
+BUILDER_IMAGE       ?= manetu/unified-builder:v3.2
+RUNTIME_IMAGE       ?= manetu/unified-builder:v3.2-jre
+DOCKER_RUN          := docker run --rm -v "$(CURDIR):/work" -w /work
+BUILD_CACHE_MOUNTS  ?= -v temporal-yb-gocache:/root/.cache/go-build -v temporal-yb-gomod:/go/pkg/mod -v temporal-yb-m2:/root/.m2
+
+.PHONY: integration-build integration-up integration-down integration-run integration-test
+
+integration-build:
+	@printf $(COLOR) "Build integration artifacts in $(BUILDER_IMAGE)..."
+	$(DOCKER_RUN) $(BUILD_CACHE_MOUNTS) -e GOFLAGS=-buildvcs=false $(BUILDER_IMAGE) make clean all
+
+integration-up:
+	@printf $(COLOR) "Start integration dependencies..."
+	docker compose -f $(INTEGRATION_COMPOSE) up --quiet-pull --wait -d
+
+integration-down:
+	@printf $(COLOR) "Stop integration dependencies..."
+	docker compose -f $(INTEGRATION_COMPOSE) down
+
+integration-run:
+	@printf $(COLOR) "Run integration suite..."
+	$(DOCKER_RUN) -i --network $(INTEGRATION_NETWORK) $(RUNTIME_IMAGE) ./integration/run.sh
+
+# Always builds first to avoid silently re-running stale (or wrong-platform) binaries,
+# and always tears down dependencies, even on failure.
+integration-test: integration-build integration-up
+	@$(MAKE) integration-run; status=$$?; $(MAKE) integration-down; exit $$status
+
+##### Unit testing ######
+# Every package except integration/core, which needs a live YugabyteDB. Deriving the
+# list means new packages that grow tests are picked up automatically.
+UNIT_TEST_PKGS ?= $(shell go list ./... | grep -v '/integration/')
+GO_TEST_FLAGS  ?=
+
+.PHONY: unit-test test
+
+unit-test:
+	@printf $(COLOR) "Run unit tests..."
+	go test $(GO_TEST_FLAGS) $(UNIT_TEST_PKGS)
+
+# Unit tests first: they take seconds and need no infrastructure, so a failure here
+# saves the multi-minute build-and-container round trip in integration-test.
+test: unit-test integration-test
+
 target/temporal-server: $(ALL_SRC)
 	@printf $(COLOR) "Build $(@) with CGO_ENABLED=$(CGO_ENABLED) for $(GOOS)/$(GOARCH)..."
 	CGO_ENABLED=$(CGO_ENABLED) go build $(EXTRA_SERVER_BUILD_FLAGS) -o $@ ./cmd/server
